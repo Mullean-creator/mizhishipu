@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>谜之食谱世界｜狩猎版</title>
+<title>谜之食谱世界</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box}
@@ -71,19 +71,13 @@ input,select{width:100%;padding:12px;border:1px solid #ccc;border-radius:10px;ba
     <div class="topbar">
       <button class="menuBtn" onclick="toggleSide()">☰</button>
       <h1 style="margin:0;font-size:24px">🍲 谜之食谱世界</h1>
-      <button class="primary" style="margin-left:auto;padding:8px 12px" onclick="showSection('hunt')">⚔️ 狩猎</button>
+      <button class="primary" style="margin-left:auto;padding:8px 12px" onclick="showSection('hunt')">⚔️ 地图 / 狩猎</button>
     </div>
 
     <div id="mainSection" class="section active">
       <div class="card">
         <h2>🏠 冒险者大厅</h2>
         <p id="welcomeText" class="muted">欢迎来到冒险者世界。</p>
-      </div>
-
-      <div class="card">
-        <h2>⚔️ 狩猎</h2>
-        <p class="muted">前往地图、寻找魔物并获取掉落素材。每次狩猎消耗 1 点 AP。</p>
-        <button class="primary" onclick="showSection('hunt')">🗺️ 进入地图 / 狩猎</button>
       </div>
 
       <div class="card">
@@ -102,7 +96,7 @@ input,select{width:100%;padding:12px;border:1px solid #ccc;border-radius:10px;ba
       <div class="card">
         <h2>⚔️ 狩猎入口</h2>
         <p class="muted">选择地图后进入狩猎。每次狩猎消耗 1 点行动力，成功后会按照魔物的掉落表获得素材。</p>
-        <button class="primary" onclick="showSection('hunt')">前往狩猎</button>
+        <button class="primary" onclick="showSection('hunt')">⚔️ 前往地图 / 狩猎</button>
       </div>
     </div>
 
