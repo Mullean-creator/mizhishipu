@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>谜之食谱世界</title>
+<title>谜之食谱世界｜狩猎版</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box}
@@ -40,6 +40,8 @@ input,select{width:100%;padding:12px;border:1px solid #ccc;border-radius:10px;ba
 .attrGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .small{font-size:13px}
 .huntResult{padding:14px;border-radius:14px;background:#f8f6f0;margin-top:12px;white-space:pre-line}
+
+.battleHud{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0}.fighter{border:1px solid #e5e0d6;border-radius:16px;padding:14px;background:#f8f6f0}.fighterTitle{font-weight:700;font-size:18px;display:flex;justify-content:space-between;gap:8px}.hpbar{height:12px;background:#ddd6c9;border-radius:99px;overflow:hidden;margin:8px 0}.hpfill{height:100%;background:#29251f;transition:width .25s}.battleLog{height:180px;overflow:auto;background:#171511;color:#f8f6f0;border-radius:14px;padding:12px;font-size:14px;line-height:1.65}.battleActions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}.battleActions button{min-height:48px}.encounter{border:2px solid #e5e0d6;border-radius:16px;padding:14px;margin:10px 0;background:#fff}.encounter.selected{border-color:#29251f;background:#f8f6f0}.statline{display:flex;justify-content:space-between;gap:8px;padding:5px 0}.modalClose{float:right;border:0;background:#eee9df;border-radius:10px;padding:8px 11px}.dangerText{color:#b3261e}@media(max-width:600px){.battleHud{grid-template-columns:1fr}.battleActions{grid-template-columns:1fr 1fr}}
 @media(max-width:600px){.wrap{padding:12px}.grid,.attrGrid{grid-template-columns:1fr}.card{padding:16px}}
 </style>
 </head>
@@ -71,13 +73,19 @@ input,select{width:100%;padding:12px;border:1px solid #ccc;border-radius:10px;ba
     <div class="topbar">
       <button class="menuBtn" onclick="toggleSide()">☰</button>
       <h1 style="margin:0;font-size:24px">🍲 谜之食谱世界</h1>
-      <button class="primary" style="margin-left:auto;padding:8px 12px" onclick="showSection('hunt')">⚔️ 地图 / 狩猎</button>
+      <button class="primary" style="margin-left:auto;padding:8px 12px" onclick="showSection('hunt')">⚔️ 狩猎</button>
     </div>
 
     <div id="mainSection" class="section active">
       <div class="card">
         <h2>🏠 冒险者大厅</h2>
         <p id="welcomeText" class="muted">欢迎来到冒险者世界。</p>
+      </div>
+
+      <div class="card">
+        <h2>⚔️ 狩猎</h2>
+        <p class="muted">前往地图、寻找魔物并获取掉落素材。每次狩猎消耗 1 点 AP。</p>
+        <button class="primary" onclick="showSection('hunt')">🗺️ 进入地图 / 狩猎</button>
       </div>
 
       <div class="card">
@@ -96,7 +104,7 @@ input,select{width:100%;padding:12px;border:1px solid #ccc;border-radius:10px;ba
       <div class="card">
         <h2>⚔️ 狩猎入口</h2>
         <p class="muted">选择地图后进入狩猎。每次狩猎消耗 1 点行动力，成功后会按照魔物的掉落表获得素材。</p>
-        <button class="primary" onclick="showSection('hunt')">⚔️ 前往地图 / 狩猎</button>
+        <button class="primary" onclick="showSection('hunt')">前往狩猎</button>
       </div>
     </div>
 
@@ -115,19 +123,26 @@ input,select{width:100%;padding:12px;border:1px solid #ccc;border-radius:10px;ba
       </div>
     </div>
 
+    <div id="recipeSection" class="section">
+      <div class="card">
+        <h2>🍳 创意料理提交</h2>
+        <p class="muted">游戏外完成原创料理/食谱后，在这里提交登记。请同时把成品和食谱发布到企划指定的 QQ 群相册，管理员会根据提交审核地图解锁。</p>
+        <input id="recipeName" placeholder="料理名称"><br><br>
+        <input id="recipeDesc" placeholder="简单描述 / 使用了哪些魔物食材"><br><br>
+        <button class="primary" onclick="submitRecipe()">📨 提交料理并提醒管理员审核</button>
+        <p id="recipeMsg" class="muted"></p>
+      </div>
+      <div class="card">
+        <h3>📜 我的提交记录</h3>
+        <div id="recipeList"><p class="muted">暂无记录。</p></div>
+      </div>
+    </div>
+
     <div id="huntSection" class="section">
       <div class="card">
-        <h2>🗺️ 地图与狩猎</h2>
+        <h2>🗺️ 冒险地图</h2>
         <p id="huntStatus" class="muted">正在读取地图……</p>
         <div id="maps"></div>
-      </div>
-
-      <div id="monsterCard" class="card" style="display:none">
-        <h2>👾 这里的魔物</h2>
-        <div id="monsters"></div>
-        <button id="huntBtn" class="primary" onclick="hunt()" disabled>⚔️ 开始狩猎（消耗 1 AP）</button>
-        <p id="huntMsg" class="muted"></p>
-        <div id="huntResult" class="huntResult" style="display:none"></div>
       </div>
     </div>
   </div>
@@ -141,6 +156,7 @@ input,select{width:100%;padding:12px;border:1px solid #ccc;border-radius:10px;ba
   <button id="navPanel" class="navbtn" onclick="showSection('panel')">👤 我的面板</button>
   <button id="navInventory" class="navbtn" onclick="showSection('inventory')">🎒 我的背包</button>
   <button id="navHunt" class="navbtn" onclick="showSection('hunt')">⚔️ 地图 / 狩猎</button>
+   <button id="navRecipe" class="navbtn" onclick="showSection('recipe')">🍳 提交料理</button>
   <hr>
   <button class="navbtn" onclick="closeSide()">✕ 关闭菜单</button>
 </aside>
@@ -174,6 +190,37 @@ input,select{width:100%;padding:12px;border:1px solid #ccc;border-radius:10px;ba
       <button class="primary" onclick="createAdventurer()">创建冒险者</button>
     </div>
     <p id="setupMsg" class="muted"></p>
+  </div>
+</div>
+
+<div id="huntModalBack" class="modalBack">
+  <div class="modal">
+    <button class="modalClose" onclick="closeHuntModal()">✕</button>
+    <h2 id="huntModalTitle">🗺️ 狩猎</h2>
+    <p id="huntModalDesc" class="muted"></p>
+    <div id="encounters"></div>
+    <p id="huntModalMsg" class="muted"></p>
+    <div class="card" style="box-shadow:none;background:#f8f6f0;margin-top:10px"><b>👥 临时狩猎队</b><p class="small muted">可选。组队不会绑定玩家；完成本次狩猎后可离队。组队人数越多，稀有部件出现机会越高。</p><div class="row"><button class="secondary" onclick="createHuntTeam()">创建队伍</button><input id="teamCodeInput" placeholder="输入队伍邀请码" style="max-width:220px"><button class="secondary" onclick="joinHuntTeam()">加入队伍</button><button class="secondary" onclick="leaveHuntTeam()">离开队伍</button></div><p id="teamMsg" class="small muted"></p></div><button id="encounterStartBtn" class="primary" onclick="startBattle()" disabled style="margin-top:10px">⚔️ 开始狩猎（消耗 1 AP）</button>
+  </div>
+</div>
+
+<div id="battleModalBack" class="modalBack">
+  <div class="modal">
+    <h2>⚔️ 回合制狩猎战</h2>
+    <div class="battleHud">
+      <div class="fighter"><div class="fighterTitle"><span>🧑 冒险者</span><span id="playerHpText">0 / 0</span></div><div class="hpbar"><div id="playerHpFill" class="hpfill"></div></div><div id="playerBattleStats" class="small muted"></div></div>
+      <div class="fighter"><div class="fighterTitle"><span id="battleMonsterName">👾 魔物</span><span id="monsterHpText">0 / 0</span></div><div class="hpbar"><div id="monsterHpFill" class="hpfill"></div></div><div id="monsterBattleStats" class="small muted"></div></div>
+    </div>
+    <div id="battleRound" class="statline"><b>第 1 回合</b><span>轮到你行动</span></div>
+    <div id="battleLog" class="battleLog"></div>
+    <div id="battleActions" class="battleActions">
+      <button class="primary" onclick="battleAction('attack')">🗡️ 普通攻击</button>
+      <button class="primary" onclick="battleAction('skill')">✨ 技巧攻击</button>
+      <button class="secondary" onclick="battleAction('defend')">🛡️ 防御</button>
+      <button class="secondary" onclick="battleAction('sense')">👁️ 观察</button>
+    </div>
+    <div id="battleResult" class="huntResult" style="display:none"></div>
+    <button id="battleCloseBtn" class="secondary" style="display:none;width:100%;margin-top:10px" onclick="closeBattleModal()">返回地图</button>
   </div>
 </div>
 
@@ -229,7 +276,7 @@ function closeSide(){
 }
 
 function showSection(name){
-  ["main","panel","inventory","hunt"].forEach(x=>{
+  ["main","panel","inventory","hunt","recipe"].forEach(x=>{
     const sec=document.getElementById(x+"Section");
     if(sec)sec.classList.toggle("active",x===name);
     const nav=document.getElementById("nav"+x.charAt(0).toUpperCase()+x.slice(1));
@@ -239,6 +286,7 @@ function showSection(name){
   if(name==="panel")loadPanel();
   if(name==="inventory")loadInventory();
   if(name==="hunt")loadHuntData();
+  if(name==="recipe")loadRecipeList();
 }
 
 async function loadGame(){
@@ -405,309 +453,261 @@ async function loadInventory(){
 }
 
 /* =========================
-   地图 / 魔物 / 狩猎
+   地图 / 魔物 / 回合制狩猎
    ========================= */
 
 async function loadHuntData(){
   const status=document.getElementById("huntStatus");
   status.textContent="正在读取地图……";
   document.getElementById("maps").innerHTML="";
-  document.getElementById("monsterCard").style.display="none";
-  selectedMap=null;
-  selectedMonster=null;
-
-  // 你现在的数据库表名是 game_regions，不是旧版的 maps。
+  selectedMap=null; selectedMonster=null;
   const {data,error}=await db.from("game_regions").select("*").order("id",{ascending:true});
-  if(error){
-    status.innerHTML="<span class='err'>读取地图失败："+escapeHtml(error.message)+"</span>";
-    return;
-  }
-
+  if(error){status.innerHTML="<span class='err'>读取地图失败："+escapeHtml(error.message)+"</span>";return;}
   maps=data||[];
-  if(!maps.length){
-    status.textContent="目前没有地图数据。请先在 Supabase 的 game_regions 表中添加地图。";
-    return;
-  }
-
-  status.textContent="请选择要前往的地图。";
+  if(!maps.length){status.textContent="目前没有地图数据。请先在 Supabase 的 game_regions 表中添加地图。";return;}
+  status.textContent="点击地图进入该区域，然后会弹出狩猎窗口。";
   renderMaps();
 }
-
-function mapName(m){
-  return m.name ?? m.region_name ?? m.title ?? m.location_name ?? m.region_key ?? ("地图 #"+m.id);
-}
-
-function mapDesc(m){
-  return m.description ?? m.desc ?? "暂无地图说明";
-}
-
-function mapDanger(m){
-  const n=Number(m.danger_level);
-  return Number.isFinite(n)?n:null;
-}
-
+function mapName(m){return m.name ?? m.region_name ?? m.title ?? m.location_name ?? m.region_key ?? ("地图 #"+m.id)}
+function mapDesc(m){return m.description ?? m.desc ?? "暂无地图说明"}
+function mapDanger(m){const n=Number(m.danger_level);return Number.isFinite(n)?n:0}
 function renderMaps(){
-  const box=document.getElementById("maps");
-  box.innerHTML=maps.map(m=>`
-    <div class="mapItem ${selectedMap&&String(selectedMap.id)===String(m.id)?"selected":""}">
+  document.getElementById("maps").innerHTML=maps.map(m=>`
+    <div class="mapItem">
       <b>${escapeHtml(m.icon||"🗺️")} ${escapeHtml(mapName(m))}</b>
-      ${mapDanger(m)!==null?`<span class="badge">危险度 ${mapDanger(m)}</span>`:""}
+      <span class="badge">危险度 ${mapDanger(m)}</span>
       <p class="muted">${escapeHtml(mapDesc(m))}</p>
       ${m.is_initial?`<p class="small ok">✦ 初始区域</p>`:""}
-      <button class="secondary" onclick="selectMap('${escapeJs(String(m.id))}')">进入这里</button>
-    </div>
-  `).join("");
+      <button class="primary" onclick="selectMap('${escapeJs(String(m.id))}')">进入地图 →</button>
+    </div>`).join("");
 }
 
 async function selectMap(id){
-  selectedMap=maps.find(m=>String(m.id)===String(id));
-  selectedMonster=null;
-  renderMaps();
-
-  const card=document.getElementById("monsterCard");
-  const box=document.getElementById("monsters");
-  card.style.display="block";
-  box.innerHTML="<p class='muted'>正在读取魔物……</p>";
-  document.getElementById("huntMsg").textContent="";
-  document.getElementById("huntResult").style.display="none";
-  document.getElementById("huntBtn").disabled=true;
-
-  // 当前数据库没有单独的 monsters 表。
-  // monster_drops.monster_id 就是目前可用的魔物 ID，因此直接从掉落表建立魔物列表。
+  selectedMap=maps.find(m=>String(m.id)===String(id))||null;
+  if(!selectedMap)return;
+  document.getElementById("huntModalTitle").textContent="🗺️ "+mapName(selectedMap)+" · 遭遇探索";
+  document.getElementById("huntModalDesc").textContent=mapDesc(selectedMap)+"　危险度："+mapDanger(selectedMap);
+  document.getElementById("huntModalMsg").textContent="正在探索……";
+  document.getElementById("encounters").innerHTML="<p class='muted'>🎲 正在寻找魔物……</p>";
+  document.getElementById("encounterStartBtn").disabled=true;
+  document.getElementById("huntModalBack").classList.add("show");
+  await refreshTeam();
   const {data,error}=await db.from("monster_drops").select("*").order("monster_id",{ascending:true});
-  if(error){
-    box.innerHTML="<p class='err'>读取魔物失败："+escapeHtml(error.message)+"</p>";
-    return;
-  }
-
+  if(error){document.getElementById("encounters").innerHTML="<p class='err'>读取魔物失败："+escapeHtml(error.message)+"</p>";return;}
   const grouped={};
-  (data||[]).forEach(drop=>{
-    if(drop.monster_id===null||drop.monster_id===undefined)return;
-    const key=String(drop.monster_id);
-    if(!grouped[key])grouped[key]=[];
-    grouped[key].push(drop);
-  });
-
-  monsters=Object.keys(grouped).map(id=>({
-    id:id,
-    monster_id:id,
-    drops:grouped[id]
-  }));
-
-  if(!monsters.length){
-    box.innerHTML="<p class='muted'>目前 monster_drops 表里还没有魔物数据。</p>";
-    return;
-  }
-
-  renderMonsters();
+  (data||[]).forEach(drop=>{if(drop.monster_id==null)return;(grouped[String(drop.monster_id)]??=[]).push(drop)});
+  monsters=Object.keys(grouped).map(mid=>({id:mid,monster_id:mid,drops:grouped[mid]}));
+  if(!monsters.length){document.getElementById("encounters").innerHTML="<p class='muted'>目前没有可遇到的魔物。</p>";return;}
+  // 地图点击后只随机遇到一只，不让玩家挑怪。
+  selectedMonster=monsters[Math.floor(Math.random()*monsters.length)];
+  const st=buildMonsterStats(selectedMonster,selectedMap);
+  document.getElementById("encounters").innerHTML=`<div class="encounter selected">
+    <b>🎲 遭遇！ 👾 ${escapeHtml(monsterName(selectedMonster))}</b><span class="badge">Lv.${st.level}</span>
+    <div class="statline"><span>❤️ HP</span><b>${st.maxHp}</b></div>
+    <div class="statline"><span>⚔️ 攻击</span><b>${st.attack}</b></div>
+    <div class="statline"><span>🛡️ 防御</span><b>${st.defense}</b></div>
+    <div class="statline"><span>💨 速度</span><b>${st.speed}</b></div>
+    <p class="small muted">可能发现：${escapeHtml((selectedMonster.drops||[]).map(d=>d.item_name).filter(Boolean).slice(0,5).join("、")||"未知素材")}</p>
+  </div>`;
+  document.getElementById("huntModalMsg").textContent="遭遇魔物！准备进入回合制战斗。";
+  document.getElementById("encounterStartBtn").disabled=false;
 }
-
-function monsterName(m){
-  // 目前没有 monsters 表，所以使用 monster_id 作为稳定显示名。
-  return m.name ?? m.monster_name ?? m.title ?? ("魔物 #"+m.monster_id);
-}
-
-function monsterDesc(m){
-  if(m.description||m.desc||m.monster_desc)return m.description??m.desc??m.monster_desc;
-  const drops=m.drops||[];
-  if(!drops.length)return "暂无魔物说明";
-  const names=drops.map(d=>d.item_name).filter(Boolean).slice(0,4);
-  return names.length?"可能掉落："+names.join("、"):"暂无掉落说明";
-}
-
-function monsterDifficulty(m){
-  const d=mapDanger(selectedMap);
-  return d===null?null:d;
-}
-
-function renderMonsters(){
-  const box=document.getElementById("monsters");
-  box.innerHTML=monsters.map(m=>`
-    <div class="monsterItem ${selectedMonster&&String(selectedMonster.id)===String(m.id)?"mapItem selected":""}">
-      <b>👾 ${escapeHtml(monsterName(m))}</b>
-      ${monsterDifficulty(m)!==null?`<span class="badge">地图危险度 ${monsterDifficulty(m)}</span>`:""}
-      <p class="muted">${escapeHtml(monsterDesc(m))}</p>
-      <p class="small muted">掉落项目：${m.drops?.length||0} 种</p>
-      <button class="secondary" onclick="selectMonster('${escapeJs(String(m.id))}')">选择魔物</button>
-    </div>
-  `).join("");
-}
-
-function selectMonster(id){
+function closeHuntModal(){document.getElementById("huntModalBack").classList.remove("show")}
+function monsterName(m){return m.name ?? m.monster_name ?? m.title ?? ("魔物 #"+m.monster_id)}
+function chooseEncounter(id){
   selectedMonster=monsters.find(m=>String(m.id)===String(id))||null;
-  renderMonsters();
-
-  const btn=document.getElementById("huntBtn");
-  btn.disabled=!selectedMonster;
-
-  document.getElementById("huntMsg").textContent=selectedMonster
-    ? "已选择「"+monsterName(selectedMonster)+"」，准备好后点击狩猎。"
-    : "";
-  document.getElementById("huntResult").style.display="none";
+  document.querySelectorAll('.encounter').forEach(e=>e.classList.remove('selected'));
+  const el=document.getElementById("enc_"+id);if(el)el.classList.add("selected");
+  document.getElementById("encounterStartBtn").disabled=!selectedMonster;
+  document.getElementById("huntModalMsg").textContent=selectedMonster?"已选择「"+monsterName(selectedMonster)+"」。确认后进入回合制战斗。":"";
 }
-
-function weightedPick(items){
-  const usable=items.filter(x=>Number(x.drop_weight??0)>0);
-  if(!usable.length)return items.length?items[Math.floor(Math.random()*items.length)]:null;
-  const total=usable.reduce((sum,x)=>sum+Number(x.drop_weight||0),0);
-  let r=Math.random()*total;
-  for(const item of usable){
-    r-=Number(item.drop_weight||0);
-    if(r<=0)return item;
-  }
-  return usable[usable.length-1];
+function hashId(v){let n=0;for(const c of String(v)){n=(n*31+c.charCodeAt(0))%997}return n}
+function buildMonsterStats(m,map){
+  const danger=Math.max(0,mapDanger(map));
+  const level=Math.max(1,danger+1+(hashId(m.id)%3));
+  return {level,maxHp:50+level*18+(hashId(m.id)%16),attack:7+level*3+(hashId(m.id)%5),defense:3+Math.floor(level*1.5),speed:5+level+(hashId(m.id)%4),crit:5+level*0.7};
 }
-
-async function hunt(){
-  if(!currentUser||!currentAdventurer||!selectedMap||!selectedMonster)return;
-
-  const btn=document.getElementById("huntBtn");
-  const msgBox=document.getElementById("huntMsg");
-  const result=document.getElementById("huntResult");
-
-  if(Number(currentAdventurer.action_points??0)<1){
-    msgBox.textContent="行动点不足，请先去客栈休息。";
-    msgBox.className="err";
-    return;
+function buildPlayerStats(a){
+  const technique=Number(a.technique||0), endurance=Number(a.endurance||0), taste=Number(a.taste||0), magic=Number(a.magic_sense||0), smell=Number(a.smell||0), proficiency=Number(a.proficiency||0);
+  return {maxHp:70+endurance*15,attack:8+technique*2,defense:3+Math.floor(endurance*1.7),magic:5+magic*2+taste, speed:5+technique+smell, crit:5+smell*1.5};
+}
+let battle=null;
+let activeTeam=null;
+async function refreshTeam(){
+  if(!currentUser)return;
+  const msg=document.getElementById("teamMsg"); if(!msg)return;
+  const {data,error}=await db.from("hunt_team_members").select("team_id,player_id,hunt_teams(id,code,status)").eq("player_id",currentUser.id);
+  if(error){msg.textContent="组队读取失败："+error.message;return;}
+  const row=(data||[]).find(x=>x.hunt_teams?.status==="active");
+  activeTeam=row?.hunt_teams||null;
+  msg.textContent=activeTeam?"当前临时队伍："+activeTeam.code+"（完成狩猎后可离开）":"当前未加入临时队伍。";
+}
+async function createHuntTeam(){
+  if(!currentUser)return;
+  await leaveHuntTeam(true);
+  const code=Math.random().toString(36).slice(2,6).toUpperCase();
+  const {data,error}=await db.from("hunt_teams").insert({leader_id:currentUser.id,code,status:"active"}).select().single();
+  if(error){document.getElementById("teamMsg").textContent="创建失败："+error.message;return;}
+  const {error:e2}=await db.from("hunt_team_members").insert({team_id:data.id,player_id:currentUser.id});
+  if(e2){document.getElementById("teamMsg").textContent="加入队伍失败："+e2.message;return;}
+  activeTeam=data; document.getElementById("teamMsg").textContent="队伍创建成功！邀请码："+code;
+}
+async function joinHuntTeam(){
+  const code=document.getElementById("teamCodeInput").value.trim().toUpperCase();
+  if(!code)return;
+  const {data,error}=await db.from("hunt_teams").select("*").eq("code",code).eq("status","active").maybeSingle();
+  if(error||!data){document.getElementById("teamMsg").textContent="找不到这个临时队伍。";return;}
+  await leaveHuntTeam(true);
+  const {error:e}=await db.from("hunt_team_members").insert({team_id:data.id,player_id:currentUser.id});
+  if(e){document.getElementById("teamMsg").textContent="加入失败："+e.message;return;}
+  activeTeam=data;document.getElementById("teamMsg").textContent="已加入队伍："+code;
+}
+async function leaveHuntTeam(silent=false){
+  if(currentUser){
+    const {data}=await db.from("hunt_team_members").select("team_id").eq("player_id",currentUser.id);
+    for(const r of (data||[])) await db.from("hunt_team_members").delete().eq("team_id",r.team_id).eq("player_id",currentUser.id);
   }
-
-  btn.disabled=true;
-  msgBox.textContent="正在狩猎……";
-  msgBox.className="muted";
-  result.style.display="none";
-
-  // 重新读取角色，避免页面停留旧 AP。
-  const {data:fresh,error:freshError}=await db.from("adventurers").select("*").eq("user_id",currentUser.id).maybeSingle();
-  if(freshError||!fresh){
-    msgBox.textContent="无法读取最新冒险者资料。"+(freshError?freshError.message:"");
-    msgBox.className="err";
-    btn.disabled=false;
-    return;
+  activeTeam=null;
+  if(!silent&&document.getElementById("teamMsg"))document.getElementById("teamMsg").textContent="已离开临时队伍。";
+}
+async function getTeamSize(){
+  if(!activeTeam)return 1;
+  const {data}=await db.from("hunt_team_members").select("player_id").eq("team_id",activeTeam.id);
+  return Math.max(1,(data||[]).length);
+}
+function startBattle(){
+  if(!selectedMonster||!selectedMap||!currentAdventurer)return;
+  if(Number(currentAdventurer.action_points||0)<1){document.getElementById("huntModalMsg").textContent="行动点不足，请先去客栈休息。";document.getElementById("huntModalMsg").className="err";return;}
+  closeHuntModal();
+  const p=buildPlayerStats(currentAdventurer), m=buildMonsterStats(selectedMonster,selectedMap);
+  battle={round:1,player:p,monster:m,playerHp:p.maxHp,monsterHp:m.maxHp,defending:false,observed:false,ended:false,log:[],teamSize:await getTeamSize()};
+  document.getElementById("battleModalBack").classList.add("show");
+  document.getElementById("battleResult").style.display="none";
+  document.getElementById("battleCloseBtn").style.display="none";
+  document.getElementById("battleActions").style.display="grid";
+  document.getElementById("battleMonsterName").textContent="👾 "+monsterName(selectedMonster)+" Lv."+m.level;
+  addBattleLog("⚔️ 你在「"+mapName(selectedMap)+"」遭遇了「"+monsterName(selectedMonster)+"」！");
+  addBattleLog("第 1 回合开始。选择你的行动。",true);
+  updateBattleUI();
+  // AP 在战斗开始时消耗一次
+  consumeAPForBattle();
+}
+async function consumeAPForBattle(){
+  const fresh=currentAdventurer;
+  const newAP=Math.max(0,Number(fresh.action_points||0)-1);
+  const {data,error}=await db.from("adventurers").update({action_points:newAP}).eq("user_id",currentUser.id).select().single();
+  if(error){addBattleLog("❌ 行动点扣除失败，战斗已取消。",true);battle.ended=true;return}
+  currentAdventurer=data;
+}
+function addBattleLog(text,important=false){
+  if(!battle)return;
+  battle.log.push((important?"【":"")+text+(important?"】":""));
+  const box=document.getElementById("battleLog");box.innerHTML=battle.log.map(x=>"<div>"+escapeHtml(x)+"</div>").join("");box.scrollTop=box.scrollHeight;
+}
+function updateBattleUI(){
+  if(!battle)return;
+  const p=battle.player,m=battle.monster;
+  document.getElementById("playerHpText").textContent=Math.max(0,Math.round(battle.playerHp))+" / "+p.maxHp;
+  document.getElementById("monsterHpText").textContent=Math.max(0,Math.round(battle.monsterHp))+" / "+m.maxHp;
+  document.getElementById("playerHpFill").style.width=(Math.max(0,battle.playerHp)/p.maxHp*100)+"%";
+  document.getElementById("monsterHpFill").style.width=(Math.max(0,battle.monsterHp)/m.maxHp*100)+"%";
+  document.getElementById("playerBattleStats").textContent=`攻击 ${p.attack}　防御 ${p.defense}　魔力 ${p.magic}　速度 ${p.speed}　暴击 ${Math.round(p.crit)}%`;
+  document.getElementById("monsterBattleStats").textContent=`攻击 ${m.attack}　防御 ${m.defense}　速度 ${m.speed}　暴击 ${Math.round(m.crit)}%`;
+  document.getElementById("battleRound").innerHTML=`<b>第 ${battle.round} 回合</b><span>${battle.ended?"战斗结束":"轮到你行动"}</span>`;
+}
+function rollDamage(base,def,variance=.15){return Math.max(1,Math.round(base*(1+(Math.random()*2-1)*variance)-def))}
+async function battleAction(action){
+  if(!battle||battle.ended)return;
+  const p=battle.player,m=battle.monster;
+  let dmg=0;
+  if(action==='attack'){
+    const hit=Math.min(.95,.65+p.technique*.025+p.speed*.01);
+    if(Math.random()>hit){addBattleLog("🎯 你的攻击没有命中！");}else{
+      dmg=rollDamage(p.attack,m.defense,.15);
+      if(Math.random()*100<p.crit){dmg=Math.round(dmg*1.7);addBattleLog("💥 嗅觉带来的战斗直觉触发暴击！");}
+      battle.monsterHp-=dmg;addBattleLog(`🗡️ 技巧攻击命中，造成 ${dmg} 点伤害。`);
+    }
+  }else if(action==='skill'){
+    // 味觉解析 + 魔力感知：找到弱点后强化本回合攻击
+    const weaknessChance=Math.min(.9,.25+p.taste*.04+p.magic*.025);
+    if(Math.random()<weaknessChance){dmg=rollDamage(p.attack+p.magic*1.1,m.defense*.6,.18);addBattleLog(`👅✨ 解析出魔物弱点！造成 ${dmg} 点弱点伤害。`);}
+    else{dmg=rollDamage(p.attack+p.magic*.65,m.defense,.2);addBattleLog(`✨ 魔力感知攻击造成 ${dmg} 点伤害。`);}
+    battle.monsterHp-=dmg;
+  }else if(action==='defend'){battle.defending=true;addBattleLog("🛡️ 你利用耐力稳住身形，本回合受到的伤害降低 55%。");}
+  else if(action==='sense'){
+    const smell=Math.min(.9,.25+p.speed*.025+p.crit*.004);
+    battle.observed=Math.random()<smell;
+    addBattleLog(battle.observed?"👃 嗅觉成功！你察觉到了魔物的下一步动作，下一次攻击更容易命中。":"👃 你暂时没能判断魔物的动作。 ");
   }
-  currentAdventurer=fresh;
-
-  if(Number(fresh.action_points??0)<1){
-    msgBox.textContent="行动点不足，请先去客栈休息。";
-    msgBox.className="err";
-    btn.disabled=false;
-    await loadPanel();
-    return;
+  updateBattleUI();
+  if(battle.monsterHp<=0){await finishBattle(true);return;}
+  await monsterTurn();
+}
+async function monsterTurn(){
+  if(!battle||battle.ended)return;
+  const p=battle.player,m=battle.monster;
+  const hitChance=Math.max(.55,Math.min(.95,.78+(m.speed-p.speed)*.025));
+  if(Math.random()>hitChance){addBattleLog("💨 魔物的攻击被你闪开了！");}
+  else{
+    let dmg=rollDamage(m.attack,p.defense,.18);
+    if(Math.random()*100<m.crit){dmg=Math.round(dmg*1.5);addBattleLog("💢 魔物暴击！")}
+    if(battle.defending)dmg=Math.max(1,Math.floor(dmg*.5));
+    battle.playerHp-=dmg;addBattleLog(`👾 魔物反击，造成 ${dmg} 点伤害。`);
   }
-
-  // 六项属性里，技巧、耐力、熟练度影响基础狩猎能力；地图危险度增加难度。
-  const ability=Number(fresh.technique||0)+Number(fresh.endurance||0)+Number(fresh.proficiency||0);
-  const danger=Number(selectedMap.danger_level||0);
-  let chance=0.70 + ability*0.02 - danger*0.05;
-  chance=Math.max(0.25,Math.min(0.95,chance));
-  const success=Math.random()<chance;
-
-  const newAP=Math.max(0,Number(fresh.action_points??0)-1);
-  const {data:updated,error:updateError}=await db.from("adventurers")
-    .update({action_points:newAP})
-    .eq("user_id",currentUser.id)
-    .select().single();
-
-  if(updateError){
-    msgBox.textContent="狩猎失败：无法扣除行动点。"+updateError.message;
-    msgBox.className="err";
-    btn.disabled=false;
-    return;
+  battle.defending=false;
+  if(battle.playerHp<=0){await finishBattle(false);return;}
+  battle.round++;
+  updateBattleUI();
+}
+async function finishBattle(win){
+  if(!battle||battle.ended)return;
+  battle.ended=true;document.getElementById("battleActions").style.display="none";document.getElementById("battleCloseBtn").style.display="block";
+  if(!win){
+    addBattleLog("💀 你被击倒了。此次狩猎失败，但不会额外扣除 AP。",true);
+    document.getElementById("battleResult").style.display="block";
+    document.getElementById("battleResult").textContent="狩猎失败\n消耗：1 AP\n剩余 AP："+(currentAdventurer?.action_points??0);
+    await recordHunt(false,0);updateBattleUI();return;
   }
-  currentAdventurer=updated;
-
-  if(!success){
-    msgBox.textContent="狩猎失败，但你安全回来了。";
-    msgBox.className="err";
-    result.style.display="block";
-    result.textContent=
-      "👾 遇到了："+monsterName(selectedMonster)+
-      "\n🗺️ 地图："+mapName(selectedMap)+
-      "\n🎯 本次狩猎成功率："+Math.round(chance*100)+"%"+
-      "\n⚡ 剩余行动点："+newAP;
-    await recordHunt(false,0);
-    btn.disabled=newAP<1;
-    return;
-  }
-
   const drops=selectedMonster.drops||[];
-  const drop=weightedPick(drops);
+  const prof=Math.max(0,Number(currentAdventurer?.proficiency||0));
+  const teamBonus=Number(battle?.teamSize||1);
   let obtained=[];
-
-  if(drop&&drop.item_name){
-    const min=Math.max(1,Number(drop.min_count??1)||1);
-    const max=Math.max(min,Number(drop.max_count??min)||min);
-    const quantity=Math.floor(Math.random()*(max-min+1))+min;
-    const itemDesc=drop.item_desc??"魔物掉落素材";
-    const saved=await addInventoryItem(drop.item_name,itemDesc,quantity);
-    if(saved)obtained.push("📦 "+drop.item_name+" ×"+quantity);
+  const tries=Math.max(1,Math.min(3,1+Math.floor(prof/5)));
+  for(let i=0;i<tries;i++){
+    const d=weightedPick(drops);
+    if(!d||!d.item_name)continue;
+    const min=Math.max(1,Number(d.min_count??1)||1),max=Math.max(min,Number(d.max_count??min)||min);
+    let quantity=Math.floor(Math.random()*(max-min+1))+min;
+    if(prof>=10)quantity+=1;
+    const saved=await addInventoryItem(d.item_name,d.item_desc??"魔物掉落素材",quantity);
+    if(saved)obtained.push("📦 "+d.item_name+" ×"+quantity);
   }
-
+  // 临时组队：额外进行一次稀有部件判定；实际队伍人数由后续组队模块传入。
+  if(teamBonus>1 && drops.length && Math.random() < Math.min(.35,.05*teamBonus)){
+    const rare=drops.slice().sort((a,b)=>Number(a.drop_weight||0)-Number(b.drop_weight||0))[0];
+    if(rare?.item_name){const saved=await addInventoryItem(rare.item_name,rare.item_desc??"协作狩猎发现的稀有部件",1);if(saved)obtained.push("🟣 协作稀有部件："+rare.item_name+" ×1");}
+  }
+  const rewardCoins=10+buildMonsterStats(selectedMonster,selectedMap).level*5;
+  const newCoins=Number(currentAdventurer?.coins||0)+rewardCoins;
+  const newScore=Number(currentAdventurer?.score||0)+10;
+  const {data}=await db.from("adventurers").update({coins:newCoins,score:newScore}).eq("user_id",currentUser.id).select().single();
+  if(data)currentAdventurer=data;
   await recordHunt(true,10);
-
-  msgBox.textContent="狩猎成功！";
-  msgBox.className="ok";
-  result.style.display="block";
-  result.textContent=
-    "⚔️ 你击败了「"+monsterName(selectedMonster)+"」！"+
-    "\n🗺️ 地图："+mapName(selectedMap)+
-    "\n🎯 成功率："+Math.round(chance*100)+"%"+
-    "\n⚡ 消耗 1 AP，剩余："+newAP+
-    "\n\n🎁 获得掉落："+
-    "\n"+(obtained.length?obtained.join("\n"):"本次没有获得掉落物。");
-
-  btn.disabled=newAP<1;
+  addBattleLog("🏆 魔物被击败了！",true);
+  document.getElementById("battleResult").style.display="block";
+  document.getElementById("battleResult").textContent="🎉 狩猎成功！\n\n🏆 +10 分　💰 +"+rewardCoins+" 金币\n🎁 掉落：\n"+(obtained.length?obtained.join("\n"):"本次没有获得掉落物。")+"\n\n⚡ 剩余 AP："+(currentAdventurer?.action_points??0);
+  updateBattleUI();
 }
-
-async function recordHunt(success,score){
-  // game_records 用于保留狩猎记录；如果 RLS 尚未允许写入，不阻塞正常狩猎。
-  try{
-    await db.from("game_records").insert({
-      user_id:currentUser.id,
-      score:Number(score||0),
-      level:Number(currentAdventurer?.level??1),
-      correct_count:success?1:0,
-      wrong_count:success?0:1
-    });
-  }catch(e){
-    console.warn("game_records 写入失败",e);
-  }
-}
-
+function closeBattleModal(){document.getElementById("battleModalBack").classList.remove("show");battle=null;loadPanel()}
+function weightedPick(items){const usable=items.filter(x=>Number(x.drop_weight??0)>0);if(!usable.length)return items.length?items[Math.floor(Math.random()*items.length)]:null;const total=usable.reduce((s,x)=>s+Number(x.drop_weight||0),0);let r=Math.random()*total;for(const item of usable){r-=Number(item.drop_weight||0);if(r<=0)return item}return usable[usable.length-1]}
+async function recordHunt(success,score){try{await db.from("game_records").insert({user_id:currentUser.id,score:Number(score||0),level:Number(currentAdventurer?.level??1),correct_count:success?1:0,wrong_count:success?0:1})}catch(e){console.warn("game_records 写入失败",e)}}
 async function addInventoryItem(itemName,itemDesc,quantity){
-  // 你的当前 inventory 表使用 item_count 字段。
-  const {data:existing,error:readError}=await db.from("inventory")
-    .select("id,item_name,item_desc,item_count")
-    .eq("player_id",currentUser.id)
-    .eq("item_name",itemName)
-    .limit(1);
-
-  if(readError){
-    console.error(readError);
-    return false;
-  }
-
-  if(existing&&existing.length){
-    const item=existing[0];
-    const oldCount=Number(item.item_count||0);
-    const {error}=await db.from("inventory")
-      .update({item_count:oldCount+quantity,item_desc:item.item_desc||itemDesc})
-      .eq("id",item.id)
-      .eq("player_id",currentUser.id);
-    return !error;
-  }
-
-  const {error}=await db.from("inventory").insert({
-    player_id:currentUser.id,
-    item_name:itemName,
-    item_desc:itemDesc,
-    item_count:quantity
-  });
-  return !error;
+  const {data:existing,error:readError}=await db.from("inventory").select("id,item_name,item_desc,item_count").eq("player_id",currentUser.id).eq("item_name",itemName).limit(1);
+  if(readError){console.error(readError);return false}
+  if(existing&&existing.length){const item=existing[0];const oldCount=Number(item.item_count||0);const {error}=await db.from("inventory").update({item_count:oldCount+quantity,item_desc:item.item_desc||itemDesc}).eq("id",item.id);return !error}
+  const {error}=await db.from("inventory").insert({player_id:currentUser.id,item_name:itemName,item_desc:itemDesc,item_count:quantity});return !error;
 }
-
-function getItemCount(item){
-  return Number(item.item_count??0);
-}
+function getItemCount(item){return Number(item.item_count??0)}
 
 /* =========================
    签到 / 客栈
