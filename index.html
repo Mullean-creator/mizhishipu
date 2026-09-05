@@ -252,33 +252,61 @@ async function signup(){
   msg("注册成功！如需验证邮箱，请先完成验证后再登录。","ok");
 }
 
+let authBusy=false;
+let gameLoading=false;
+
+function showLogin(message=""){
+  currentUser=null;
+  currentAdventurer=null;
+  document.getElementById("game").style.display="none";
+  document.getElementById("userBox").style.display="none";
+  document.getElementById("auth").style.display="block";
+  if(message) msg(message,"muted");
+}
+
 async function login(){
+  if(authBusy)return;
   const email=document.getElementById("email").value.trim();
   const password=document.getElementById("password").value;
   if(!email||!password)return msg("请输入邮箱和密码。","err");
+  authBusy=true;
+  const btn=document.querySelector('#auth button[onclick="login()"]');
+  if(btn)btn.disabled=true;
   msg("正在登录……","muted");
-  const {data,error}=await db.auth.signInWithPassword({email,password});
-  if(error){
-    console.error("登录失败",error);
-    return msg("登录失败："+(error.message||"邮箱或密码错误"),"err");
-  }
-  if(data?.user){
-    currentUser=data.user;
-    await loadGame(data.user);
+  try{
+    const {data,error}=await db.auth.signInWithPassword({email,password});
+    if(error){
+      console.error("登录失败",error);
+      msg("登录失败："+(error.message||"邮箱或密码错误"),"err");
+      return;
+    }
+    // 不在这里调用 loadGame；由 SIGNED_IN 监听统一进入游戏，避免重复加载。
+    if(data?.user) currentUser=data.user;
+  }catch(e){
+    console.error("登录异常",e);
+    msg("登录失败：网络或登录服务异常，请稍后再试。","err");
+  }finally{
+    authBusy=false;
+    if(btn)btn.disabled=false;
   }
 }
 
 async function logout(){
+  if(authBusy)return;
+  authBusy=true;
   try{
     const {error}=await db.auth.signOut({scope:"local"});
-    if(error) console.error("退出失败",error);
+    if(error){
+      console.error("退出失败",error);
+      showLogin("退出失败："+(error.message||"请稍后再试"));
+      return;
+    }
+    showLogin("已退出登录，可以再次输入邮箱和密码登录。");
+  }catch(e){
+    console.error("退出异常",e);
+    showLogin("已退出登录，请重新登录。");
   }finally{
-    currentUser=null;
-    currentAdventurer=null;
-    document.getElementById("game").style.display="none";
-    document.getElementById("userBox").style.display="none";
-    document.getElementById("auth").style.display="block";
-    msg("已退出登录，请重新登录。","muted");
+    authBusy=false;
   }
 }
 
@@ -306,31 +334,37 @@ function showSection(name){
 }
 
 async function loadGame(userArg=null){
-  let user=userArg;
-  if(!user){
-    const {data,error}=await db.auth.getUser();
-    if(error){
-      console.error("读取登录状态失败",error);
-      document.getElementById("auth").style.display="block";
+  if(gameLoading)return;
+  gameLoading=true;
+  try{
+    let user=userArg;
+    if(!user){
+      const {data,error}=await db.auth.getSession();
+      if(error){
+        console.error("读取登录状态失败",error);
+        showLogin("登录状态读取失败，请重新登录。");
+        return;
+      }
+      user=data?.session?.user;
+    }
+    if(!user){
+      showLogin();
       return;
     }
-    user=data?.user;
+
+    currentUser=user;
+    document.getElementById("auth").style.display="none";
+    document.getElementById("userBox").style.display="block";
+    document.getElementById("game").style.display="block";
+
+    const nickname=user.user_metadata?.nickname||user.email;
+    document.getElementById("who").textContent="👋 "+nickname;
+    document.getElementById("sideName").textContent="当前玩家："+nickname;
+
+    await loadAdventurer();
+  }finally{
+    gameLoading=false;
   }
-  if(!user){
-    document.getElementById("auth").style.display="block";
-    return;
-  }
-
-  currentUser=user;
-  document.getElementById("auth").style.display="none";
-  document.getElementById("userBox").style.display="block";
-  document.getElementById("game").style.display="block";
-
-  const nickname=user.user_metadata?.nickname||user.email;
-  document.getElementById("who").textContent="👋 "+nickname;
-  document.getElementById("sideName").textContent="当前玩家："+nickname;
-
-  await loadAdventurer();
 }
 
 async function loadAdventurer(){
@@ -600,7 +634,7 @@ async function getTeamSize(){
   const {data}=await db.from("hunt_team_members").select("player_id").eq("team_id",activeTeam.id);
   return Math.max(1,(data||[]).length);
 }
-function startBattle(){
+async function startBattle(){
   if(!selectedMonster||!selectedMap||!currentAdventurer)return;
   if(Number(currentAdventurer.action_points||0)<1){document.getElementById("huntModalMsg").textContent="行动点不足，请先去客栈休息。";document.getElementById("huntModalMsg").className="err";return;}
   closeHuntModal();
@@ -765,20 +799,41 @@ function escapeJs(v){
   return String(v??"").replace(/\\/g,"\\\\").replace(/'/g,"\\'");
 }
 
-// 不要在 onAuthStateChange 回调里再次调用 getUser()，避免 Supabase Auth 锁死导致“退出后无法再次登录”。
+// 认证监听只负责在登录状态变化后切换界面。
+// 绝不在回调里调用 getUser/getSession，避免 Supabase Auth 锁导致“退出后无法再次登录”。
 db.auth.onAuthStateChange((event, session)=>{
   if(event === "SIGNED_IN" && session?.user){
     currentUser=session.user;
-    setTimeout(()=>loadGame(session.user),0);
+    setTimeout(()=>{
+      if(!gameLoading && currentUser?.id===session.user.id){
+        loadGame(session.user);
+      }
+    },0);
   }else if(event === "SIGNED_OUT"){
-    currentUser=null;
-    currentAdventurer=null;
-    document.getElementById("game").style.display="none";
-    document.getElementById("userBox").style.display="none";
-    document.getElementById("auth").style.display="block";
+    showLogin();
   }
 });
-loadGame();
+
+// 首次打开页面：读取已有 session；没有 session 就停在登录页。
+(async function initAuth(){
+  try{
+    const {data,error}=await db.auth.getSession();
+    if(error){
+      console.error("读取登录状态失败",error);
+      showLogin("登录状态读取失败，请重新登录。");
+      return;
+    }
+    if(data?.session?.user){
+      currentUser=data.session.user;
+      await loadGame(data.session.user);
+    }else{
+      showLogin();
+    }
+  }catch(e){
+    console.error("初始化登录状态异常",e);
+    showLogin("请登录后继续。");
+  }
+})();
 </script>
 </body>
 </html>
