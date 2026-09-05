@@ -256,14 +256,30 @@ async function login(){
   const email=document.getElementById("email").value.trim();
   const password=document.getElementById("password").value;
   if(!email||!password)return msg("请输入邮箱和密码。","err");
-  const {error}=await db.auth.signInWithPassword({email,password});
-  if(error)return msg(error.message,"err");
-  await loadGame();
+  msg("正在登录……","muted");
+  const {data,error}=await db.auth.signInWithPassword({email,password});
+  if(error){
+    console.error("登录失败",error);
+    return msg("登录失败："+(error.message||"邮箱或密码错误"),"err");
+  }
+  if(data?.user){
+    currentUser=data.user;
+    await loadGame(data.user);
+  }
 }
 
 async function logout(){
-  await db.auth.signOut();
-  location.reload();
+  try{
+    const {error}=await db.auth.signOut({scope:"local"});
+    if(error) console.error("退出失败",error);
+  }finally{
+    currentUser=null;
+    currentAdventurer=null;
+    document.getElementById("game").style.display="none";
+    document.getElementById("userBox").style.display="none";
+    document.getElementById("auth").style.display="block";
+    msg("已退出登录，请重新登录。","muted");
+  }
 }
 
 function toggleSide(){
@@ -289,8 +305,17 @@ function showSection(name){
   if(name==="recipe")loadRecipeList();
 }
 
-async function loadGame(){
-  const {data:{user}}=await db.auth.getUser();
+async function loadGame(userArg=null){
+  let user=userArg;
+  if(!user){
+    const {data,error}=await db.auth.getUser();
+    if(error){
+      console.error("读取登录状态失败",error);
+      document.getElementById("auth").style.display="block";
+      return;
+    }
+    user=data?.user;
+  }
   if(!user){
     document.getElementById("auth").style.display="block";
     return;
@@ -740,7 +765,19 @@ function escapeJs(v){
   return String(v??"").replace(/\\/g,"\\\\").replace(/'/g,"\\'");
 }
 
-db.auth.onAuthStateChange(()=>loadGame());
+// 不要在 onAuthStateChange 回调里再次调用 getUser()，避免 Supabase Auth 锁死导致“退出后无法再次登录”。
+db.auth.onAuthStateChange((event, session)=>{
+  if(event === "SIGNED_IN" && session?.user){
+    currentUser=session.user;
+    setTimeout(()=>loadGame(session.user),0);
+  }else if(event === "SIGNED_OUT"){
+    currentUser=null;
+    currentAdventurer=null;
+    document.getElementById("game").style.display="none";
+    document.getElementById("userBox").style.display="none";
+    document.getElementById("auth").style.display="block";
+  }
+});
 loadGame();
 </script>
 </body>
