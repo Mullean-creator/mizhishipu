@@ -1,1157 +1,284 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>谜之食谱世界｜狩猎版</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<style>
-*{box-sizing:border-box}
-body{margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f6f3ea;color:#29251f}
-button,input,select{font:inherit}
-button{cursor:pointer}
-.wrap{max-width:900px;margin:auto;padding:20px}
-.card{background:#fff;border-radius:18px;padding:20px;margin:14px 0;box-shadow:0 4px 18px #0001}
-.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-.muted{color:#777}.ok{color:#16753a}.err{color:#b3261e}
-input,select{width:100%;padding:12px;border:1px solid #ccc;border-radius:10px;background:#fff}
-.primary{background:#29251f;color:#fff;border:0;padding:11px 15px;border-radius:10px}
-.secondary{background:#eee9df;color:#29251f;border:0;padding:11px 15px;border-radius:10px}
-.primary:disabled,.secondary:disabled{opacity:.55;cursor:not-allowed}
-.stat{display:inline-block;background:#f1eee6;border-radius:12px;padding:10px 14px;margin:4px}
-.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-#game{display:none}#userBox{display:none}.app{display:none}
-.topbar{display:flex;align-items:center;gap:12px;margin-bottom:12px}
-.menuBtn{font-size:22px;padding:8px 12px;background:#29251f;color:#fff;border:0;border-radius:10px}
-.side{position:fixed;left:0;top:0;bottom:0;width:270px;background:#fff;box-shadow:4px 0 20px #0002;z-index:20;padding:22px 16px;transform:translateX(-105%);transition:.2s}
-.side.open{transform:translateX(0)}
-.side h2{margin-top:4px}
-.navbtn{display:block;width:100%;text-align:left;border:0;background:#f3f0e8;color:#29251f;padding:14px;border-radius:12px;margin:8px 0}
-.navbtn.active{background:#29251f;color:#fff}
-.overlay{display:none;position:fixed;inset:0;background:#0005;z-index:19}.overlay.show{display:block}
-.section{display:none}.section.active{display:block}
-.inventoryItem,.monsterItem,.mapItem{border:1px solid #e5e0d6;border-radius:14px;padding:14px;margin:10px 0}
-.inventoryItem b,.monsterItem b,.mapItem b{font-size:17px}
-.badge{float:right;background:#29251f;color:#fff;border-radius:999px;padding:3px 9px}
-.mapItem.selected{border:2px solid #29251f;background:#f8f6f0}
-.modalBack{display:none;position:fixed;inset:0;background:#0007;z-index:50;align-items:center;justify-content:center;padding:15px}
-.modalBack.show{display:flex}
-.modal{width:min(680px,100%);max-height:92vh;overflow:auto;background:#fff;border-radius:20px;padding:22px}
-.attrGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-.small{font-size:13px}
-.huntResult{padding:14px;border-radius:14px;background:#f8f6f0;margin-top:12px;white-space:pre-line}
-
-.battleHud{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0}.fighter{border:1px solid #e5e0d6;border-radius:16px;padding:14px;background:#f8f6f0}.fighterTitle{font-weight:700;font-size:18px;display:flex;justify-content:space-between;gap:8px}.hpbar{height:12px;background:#ddd6c9;border-radius:99px;overflow:hidden;margin:8px 0}.hpfill{height:100%;background:#29251f;transition:width .25s}.battleLog{height:180px;overflow:auto;background:#171511;color:#f8f6f0;border-radius:14px;padding:12px;font-size:14px;line-height:1.65}.battleActions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}.battleActions button{min-height:48px}.encounter{border:2px solid #e5e0d6;border-radius:16px;padding:14px;margin:10px 0;background:#fff}.encounter.selected{border-color:#29251f;background:#f8f6f0}
-.teamMembers{display:grid;gap:8px;margin-top:10px}
-.teamMember{border:1px solid #ddd6c9;border-radius:12px;padding:10px;background:#fff}
-.teamMember b{display:block;margin-bottom:3px}
-.rollBox{margin:10px 0;padding:10px;border-radius:12px;background:#f8f6f0;border:1px dashed #cfc6b6}
-.roll{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:700}
-.statline{display:flex;justify-content:space-between;gap:8px;padding:5px 0}.modalClose{float:right;border:0;background:#eee9df;border-radius:10px;padding:8px 11px}.dangerText{color:#b3261e}@media(max-width:600px){.battleHud{grid-template-columns:1fr}.battleActions{grid-template-columns:1fr 1fr}}
-@media(max-width:600px){.wrap{padding:12px}.grid,.attrGrid{grid-template-columns:1fr}.card{padding:16px}}
-</style>
-</head>
-<body>
-
-<div class="wrap">
-  <div id="auth" class="card">
-    <h1>🍲 谜之食谱世界</h1>
-    <h2>冒险者登录</h2>
-    <input id="email" type="email" placeholder="邮箱"><br><br>
-    <input id="password" type="password" placeholder="密码"><br><br>
-    <input id="username" placeholder="账号名（注册时填写）"><br><br>
-    <input id="nickname" placeholder="昵称（注册时填写）"><br><br>
-    <div class="row">
-      <button class="primary" onclick="login()">登录</button>
-      <button class="secondary" onclick="signup()">注册</button>
-    </div>
-    <p id="msg" class="muted"></p>
-  </div>
-
-  <div id="userBox" class="card">
-    <div class="row">
-      <strong id="who"></strong>
-      <button class="secondary" onclick="logout()">退出</button>
-    </div>
-  </div>
-
-  <div id="game" class="app">
-    <div class="topbar">
-      <button class="menuBtn" onclick="toggleSide()">☰</button>
-      <h1 style="margin:0;font-size:24px">🍲 谜之食谱世界</h1>
-      <button class="primary" style="margin-left:auto;padding:8px 12px" onclick="showSection('hunt')">⚔️ 狩猎</button>
-    </div>
-
-    <div id="mainSection" class="section active">
-      <div class="card">
-        <h2>🏠 冒险者大厅</h2>
-        <p id="welcomeText" class="muted">欢迎来到冒险者世界。</p>
-      </div>
-
-      <div class="card">
-        <h2>⚔️ 狩猎</h2>
-        <p class="muted">前往地图、寻找魔物并获取掉落素材。每次狩猎消耗 1 点 AP。</p>
-        <button class="primary" onclick="showSection('hunt')">🗺️ 进入地图 / 狩猎</button>
-      </div>
-
-      <div class="card">
-        <h2>📅 每日签到</h2>
-        <button class="primary" onclick="signin()">签到 +500 金币</button>
-        <p id="signinMsg" class="muted"></p>
-      </div>
-
-      <div class="card">
-        <h2>🛏️ 客栈</h2>
-        <p class="muted">在这里休息，恢复行动点。</p>
-        <button class="primary" onclick="rest()">休息并恢复到最大 AP</button>
-        <p id="restMsg" class="muted"></p>
-      </div>
-
-      <div class="card">
-        <h2>⚔️ 狩猎入口</h2>
-        <p class="muted">选择地图后进入狩猎。每次狩猎消耗 1 点行动力，成功后会按照魔物的掉落表获得素材。</p>
-        <button class="primary" onclick="showSection('hunt')">前往狩猎</button>
-      </div>
-    </div>
-
-    <div id="panelSection" class="section">
-      <div class="card">
-        <h2>👤 我的面板</h2>
-        <div id="panel"></div>
-      </div>
-    </div>
-
-    <div id="inventorySection" class="section">
-      <div class="card">
-        <h2>🎒 我的背包</h2>
-        <p class="muted">这里只显示当前登录冒险者自己的物品。</p>
-        <div id="inventory"></div>
-      </div>
-    </div>
-
-    <div id="recipeSection" class="section">
-      <div class="card">
-        <h2>🍳 创意料理提交</h2>
-        <p class="muted">游戏外完成原创料理/食谱后，在这里提交登记。请同时把成品和食谱发布到企划指定的 QQ 群相册，管理员会根据提交审核地图解锁。</p>
-        <input id="recipeName" placeholder="料理名称"><br><br>
-        <input id="recipeDesc" placeholder="简单描述 / 使用了哪些魔物食材"><br><br>
-        <button class="primary" onclick="submitRecipe()">📨 提交料理并提醒管理员审核</button>
-        <p id="recipeMsg" class="muted"></p>
-      </div>
-      <div class="card">
-        <h3>📜 我的提交记录</h3>
-        <div id="recipeList"><p class="muted">暂无记录。</p></div>
-      </div>
-    </div>
-
-    <div id="huntSection" class="section">
-      <div class="card">
-        <h2>👥 临时狩猎队</h2>
-        <p class="muted">可以先组队再进入地图；也可以不组队直接进入地图。队伍是临时的，不绑定长期组队。</p>
-        <div class="row">
-          <button class="primary" onclick="createHuntTeam()">➕ 创建临时队伍</button>
-          <input id="teamCodeInput" placeholder="输入队伍邀请码" style="max-width:220px">
-          <button class="secondary" onclick="joinHuntTeam()">加入队伍</button>
-          <button class="secondary" onclick="leaveHuntTeam()">离开队伍</button>
-        </div>
-        <p id="teamMsg" class="small muted"></p>
-        <div id="teamMembers" class="teamMembers"></div>
-      </div>
-
-      <div class="card">
-        <h2>🗺️ 冒险地图</h2>
-        <p id="huntStatus" class="muted">正在读取地图……</p>
-        <p class="small muted">🎲 不组队：进入地图后立即随机遇怪。<br>👥 已组队：先显示队伍成员，再由队伍共同进行一次随机遇怪。</p>
-        <div id="maps"></div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div id="overlay" class="overlay" onclick="closeSide()"></div>
-<aside id="side" class="side">
-  <h2>🧭 冒险者菜单</h2>
-  <p id="sideName" class="muted"></p>
-  <button id="navMain" class="navbtn active" onclick="showSection('main')">🏠 主页面</button>
-  <button id="navPanel" class="navbtn" onclick="showSection('panel')">👤 我的面板</button>
-  <button id="navInventory" class="navbtn" onclick="showSection('inventory')">🎒 我的背包</button>
-  <button id="navHunt" class="navbtn" onclick="showSection('hunt')">⚔️ 地图 / 狩猎</button>
-   <button id="navRecipe" class="navbtn" onclick="showSection('recipe')">🍳 提交料理</button>
-  <hr>
-  <button class="navbtn" onclick="closeSide()">✕ 关闭菜单</button>
-</aside>
-
-<div id="setupBack" class="modalBack">
-  <div class="modal">
-    <h2>🧙 创建你的冒险者</h2>
-    <p class="muted">第一次进入游戏需要填写角色资料。六项基础属性总和必须在 <b>36～50</b> 之间。</p>
-
-    <div class="grid">
-      <input id="a_name" placeholder="姓名">
-      <input id="a_age" type="number" min="1" placeholder="年龄">
-      <input id="a_gender" placeholder="性别">
-      <input id="a_height" placeholder="身高，例如 175cm">
-      <input id="a_race" placeholder="种族，例如 人类">
-      <input id="a_job" placeholder="职业，例如 勇者">
-    </div>
-
-    <h3>⚔️ 六项基础属性</h3>
-    <div class="attrGrid">
-      <input id="a_technique" type="number" min="0" value="0" placeholder="技巧">
-      <input id="a_endurance" type="number" min="0" value="0" placeholder="耐力">
-      <input id="a_taste" type="number" min="0" value="0" placeholder="味觉">
-      <input id="a_proficiency" type="number" min="0" value="0" placeholder="熟练度">
-      <input id="a_smell" type="number" min="0" value="0" placeholder="嗅觉">
-      <input id="a_magic" type="number" min="0" value="0" placeholder="魔力感知">
-    </div>
-
-    <p id="sumText" class="muted">当前属性总和：0 / 50</p>
-    <div class="row">
-      <button class="primary" onclick="createAdventurer()">创建冒险者</button>
-    </div>
-    <p id="setupMsg" class="muted"></p>
-  </div>
-</div>
-
-<div id="huntModalBack" class="modalBack">
-  <div class="modal">
-    <button class="modalClose" onclick="closeHuntModal()">✕</button>
-    <h2 id="huntModalTitle">🗺️ 狩猎</h2>
-    <p id="huntModalDesc" class="muted"></p>
-    <div id="encounters"></div>
-    <p id="huntModalMsg" class="muted"></p>
-    <div class="card" style="box-shadow:none;background:#f8f6f0;margin-top:10px">
-      <b id="encounterModeTitle">🎲 单人遭遇</b>
-      <p id="encounterModeDesc" class="small muted">本次为单人狩猎。</p>
-      <div id="encounterTeamSummary"></div>
-    </div>
-    <button id="encounterStartBtn" class="primary" onclick="startBattle()" disabled style="margin-top:10px">⚔️ 开始战斗（消耗 1 AP）</button>
-  </div>
-</div>
-
-<div id="battleModalBack" class="modalBack">
-  <div class="modal">
-    <h2>⚔️ 回合制狩猎战</h2>
-    <div class="battleHud">
-      <div class="fighter"><div class="fighterTitle"><span>🧑 冒险者</span><span id="playerHpText">0 / 0</span></div><div class="hpbar"><div id="playerHpFill" class="hpfill"></div></div><div id="playerBattleStats" class="small muted"></div></div>
-      <div class="fighter"><div class="fighterTitle"><span id="battleMonsterName">👾 魔物</span><span id="monsterHpText">0 / 0</span></div><div class="hpbar"><div id="monsterHpFill" class="hpfill"></div></div><div id="monsterBattleStats" class="small muted"></div></div>
-    </div>
-    <div id="battleRound" class="statline"><b>第 1 回合</b><span>轮到你行动</span></div>
-    <div id="battleLog" class="battleLog"></div>
-    <div id="battleActions" class="battleActions">
-      <button class="primary" onclick="battleAction('attack')">🗡️ 普通攻击</button>
-      <button class="primary" onclick="battleAction('skill')">✨ 技巧攻击</button>
-      <button class="secondary" onclick="battleAction('defend')">🛡️ 防御</button>
-      <button class="secondary" onclick="battleAction('sense')">👁️ 观察</button>
-    </div>
-    <div id="battleResult" class="huntResult" style="display:none"></div>
-    <button id="battleCloseBtn" class="secondary" style="display:none;width:100%;margin-top:10px" onclick="closeBattleModal()">返回地图</button>
-  </div>
-</div>
-
-<script>
-const SUPABASE_URL="https://sayzluvdkxscbzvaigja.supabase.co";
-const SUPABASE_KEY="sb_publishable_0FU46ikX3BapZYxXDRVKrA_K5jLe2K0";
-const db=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-
-let currentUser=null;
-let currentAdventurer=null;
-let maps=[];
-let monsters=[];
-let selectedMap=null;
-let selectedMonster=null;
-
-function msg(t,c="muted"){
-  const e=document.getElementById("msg");
-  e.textContent=t;e.className=c;
-}
-
-async function signup(){
-  const email=document.getElementById("email").value.trim();
-  const password=document.getElementById("password").value;
-  const username=document.getElementById("username").value.trim();
-  const nickname=document.getElementById("nickname").value.trim();
-  if(!email||!password||!username||!nickname)return msg("注册请填写完整。","err");
-  const {error}=await db.auth.signUp({email,password,options:{data:{username,nickname}}});
-  if(error)return msg(error.message,"err");
-  msg("注册成功！如需验证邮箱，请先完成验证后再登录。","ok");
-}
-
-let authBusy=false;
-let gameLoading=false;
-
-function showLogin(message=""){
-  currentUser=null;
-  currentAdventurer=null;
-  document.getElementById("game").style.display="none";
-  document.getElementById("userBox").style.display="none";
-  document.getElementById("auth").style.display="block";
-  if(message) msg(message,"muted");
-}
-
-async function login(){
-  if(authBusy)return;
-  const email=document.getElementById("email").value.trim();
-  const password=document.getElementById("password").value;
-  if(!email||!password)return msg("请输入邮箱和密码。","err");
-  authBusy=true;
-  const btn=document.querySelector('#auth button[onclick="login()"]');
-  if(btn)btn.disabled=true;
-  msg("正在登录……","muted");
-  try{
-    const {data,error}=await db.auth.signInWithPassword({email,password});
-    if(error){
-      console.error("登录失败",error);
-      msg("登录失败："+(error.message||"邮箱或密码错误"),"err");
-      return;
-    }
-    // 不在这里调用 loadGame；由 SIGNED_IN 监听统一进入游戏，避免重复加载。
-    if(data?.user) currentUser=data.user;
-  }catch(e){
-    console.error("登录异常",e);
-    msg("登录失败：网络或登录服务异常，请稍后再试。","err");
-  }finally{
-    authBusy=false;
-    if(btn)btn.disabled=false;
-  }
-}
-
-async function logout(){
-  if(authBusy)return;
-  authBusy=true;
-  try{
-    const {error}=await db.auth.signOut({scope:"local"});
-    if(error){
-      console.error("退出失败",error);
-      showLogin("退出失败："+(error.message||"请稍后再试"));
-      return;
-    }
-    showLogin("已退出登录，可以再次输入邮箱和密码登录。");
-  }catch(e){
-    console.error("退出异常",e);
-    showLogin("已退出登录，请重新登录。");
-  }finally{
-    authBusy=false;
-  }
-}
-
-function toggleSide(){
-  document.getElementById("side").classList.toggle("open");
-  document.getElementById("overlay").classList.toggle("show");
-}
-function closeSide(){
-  document.getElementById("side").classList.remove("open");
-  document.getElementById("overlay").classList.remove("show");
-}
-
-function showSection(name){
-  ["main","panel","inventory","hunt","recipe"].forEach(x=>{
-    const sec=document.getElementById(x+"Section");
-    if(sec)sec.classList.toggle("active",x===name);
-    const nav=document.getElementById("nav"+x.charAt(0).toUpperCase()+x.slice(1));
-    if(nav)nav.classList.toggle("active",x===name);
-  });
-  closeSide();
-  if(name==="panel")loadPanel();
-  if(name==="inventory")loadInventory();
-  if(name==="hunt"){loadHuntData(); startTeamRefresh();}else{stopTeamRefresh();}
-  if(name==="recipe")loadRecipeList();
-}
-
-async function loadGame(userArg=null){
-  if(gameLoading)return;
-  gameLoading=true;
-  try{
-    let user=userArg;
-    if(!user){
-      const {data,error}=await db.auth.getSession();
-      if(error){
-        console.error("读取登录状态失败",error);
-        showLogin("登录状态读取失败，请重新登录。");
-        return;
-      }
-      user=data?.session?.user;
-    }
-    if(!user){
-      showLogin();
-      return;
-    }
-
-    currentUser=user;
-    document.getElementById("auth").style.display="none";
-    document.getElementById("userBox").style.display="block";
-    document.getElementById("game").style.display="block";
-
-    const nickname=user.user_metadata?.nickname||user.email;
-    document.getElementById("who").textContent="👋 "+nickname;
-    document.getElementById("sideName").textContent="当前玩家："+nickname;
-
-    await loadAdventurer();
-  }finally{
-    gameLoading=false;
-  }
-}
-
-async function loadAdventurer(){
-  const {data,error}=await db.from("adventurers").select("*").eq("user_id",currentUser.id).maybeSingle();
-
-  if(error){
-    console.error(error);
-    document.getElementById("welcomeText").textContent="角色资料读取失败："+error.message;
-    return;
-  }
-
-  currentAdventurer=data;
-
-  if(!data){
-    document.getElementById("setupBack").classList.add("show");
-    document.getElementById("welcomeText").textContent="你还没有创建冒险者，请先填写角色资料。";
-    return;
-  }
-
-  document.getElementById("welcomeText").textContent=
-    "欢迎回来，"+data.name+"！今天也去冒险吧。";
-  await loadPanel();
-}
-
-function val(id){
-  return Number(document.getElementById(id).value)||0;
-}
-
-function updateSum(){
-  const sum=val("a_technique")+val("a_endurance")+val("a_taste")+
-    val("a_magic")+val("a_smell")+val("a_proficiency");
-  const e=document.getElementById("sumText");
-  e.textContent="当前属性总和："+sum+" / 50";
-  e.className=sum>=36&&sum<=50?"ok":"muted";
-}
-["a_technique","a_endurance","a_taste","a_magic","a_smell","a_proficiency"].forEach(id=>{
-  document.addEventListener("input",e=>{if(e.target.id===id)updateSum()});
-});
-
-async function createAdventurer(){
-  const name=document.getElementById("a_name").value.trim();
-  const age=Number(document.getElementById("a_age").value);
-  const gender=document.getElementById("a_gender").value.trim();
-  const height=document.getElementById("a_height").value.trim();
-  const race=document.getElementById("a_race").value.trim();
-  const job=document.getElementById("a_job").value.trim();
-
-  const technique=val("a_technique");
-  const endurance=val("a_endurance");
-  const taste=val("a_taste");
-  const magic_sense=val("a_magic");
-  const smell=val("a_smell");
-  const proficiency=val("a_proficiency");
-  const sum=technique+endurance+taste+magic_sense+smell+proficiency;
-
-  if(!name||!age||!gender||!height||!race||!job){
-    document.getElementById("setupMsg").textContent="请把基础资料全部填写完整。";
-    document.getElementById("setupMsg").className="err";
-    return;
-  }
-  if(sum<36||sum>50){
-    document.getElementById("setupMsg").textContent="属性总和必须在 36～50 之间，目前是 "+sum+"。";
-    document.getElementById("setupMsg").className="err";
-    return;
-  }
-
-  const {data,error}=await db.from("adventurers").insert({
-    user_id:currentUser.id,name,age,gender,height,race,job,
-    technique,endurance,taste,magic_sense,smell,proficiency,
-    action_points:5,max_action_points:5,coins:0
-  }).select().single();
-
-  if(error){
-    document.getElementById("setupMsg").textContent="创建失败："+error.message;
-    document.getElementById("setupMsg").className="err";
-    return;
-  }
-
-  currentAdventurer=data;
-  document.getElementById("setupBack").classList.remove("show");
-  document.getElementById("welcomeText").textContent="欢迎，"+data.name+"！你的冒险者档案已经创建完成。";
-  await loadPanel();
-}
-
-async function loadPanel(){
-  if(!currentUser)return;
-  if(!currentAdventurer)await loadAdventurer();
-  if(!currentAdventurer)return;
-
-  const d=currentAdventurer;
-  document.getElementById("panel").innerHTML=`
-    <div class="card" style="box-shadow:none;background:#f8f6f0">
-      <h3>【冒险者档案】</h3>
-      <div class="grid">
-        <div>👤 姓名：${escapeHtml(d.name)}</div>
-        <div>🎂 年龄：${d.age} 岁</div>
-        <div>⚧ 性别：${escapeHtml(d.gender)}</div>
-        <div>📏 身高：${escapeHtml(d.height)}</div>
-        <div>🧬 种族：${escapeHtml(d.race)}</div>
-        <div>⚔️ 职业：${escapeHtml(d.job)}</div>
-        <div>📍 位置：${escapeHtml(d.location||"城镇")}</div>
-        <div>⚡ 行动点：${d.action_points??0} / ${d.max_action_points??5}</div>
-        <div>💰 金币：${d.coins??0} 枚</div>
-        <div>🏆 等级：${d.level??1}</div>
-        <div>⭐ 分数：${d.score??0}</div>
-      </div>
-    </div>
-    <div class="card" style="box-shadow:none;background:#f8f6f0">
-      <h3>【基础属性面板】</h3>
-      <span class="stat">🗡️ 技巧 ${d.technique}</span>
-      <span class="stat">🛡️ 耐力 ${d.endurance}</span>
-      <span class="stat">👅 味觉 ${d.taste}</span>
-      <span class="stat">✨ 魔力感知 ${d.magic_sense}</span>
-      <span class="stat">👃 嗅觉 ${d.smell}</span>
-      <span class="stat">📈 熟练度 ${d.proficiency}</span>
-    </div>`;
-}
-
-async function loadInventory(){
-  const box=document.getElementById("inventory");
-  box.innerHTML="<p class='muted'>正在读取背包……</p>";
-
-  const {data,error}=await db.from("inventory").select("*")
-    .eq("player_id",currentUser.id)
-    .order("id",{ascending:true});
-
-  if(error){
-    box.innerHTML="<p class='err'>读取背包失败："+escapeHtml(error.message)+"</p>";
-    return;
-  }
-  if(!data?.length){
-    box.innerHTML="<p class='muted'>🎒 背包目前是空的。</p>";
-    return;
-  }
-
-  box.innerHTML=data.map(item=>{
-    const count=getItemCount(item);
-    return `
-      <div class="inventoryItem">
-        <span class="badge">×${count}</span>
-        <b>📦 ${escapeHtml(item.item_name)}</b>
-        <p class="muted">${escapeHtml(item.item_desc||"暂无物品说明")}</p>
-      </div>`;
-  }).join("");
-}
-
-/* =========================
-   地图 / 魔物 / 回合制狩猎
-   ========================= */
-
-function startTeamRefresh(){
-  if(teamRefreshTimer)return;
-  teamRefreshTimer=setInterval(async()=>{
-    if(currentUser && document.getElementById("huntSection")?.classList.contains("active")){
-      await refreshTeam();
-      if(document.getElementById("huntModalBack")?.classList.contains("show")) renderEncounterTeamSummary();
-    }
-  },4000);
-}
-function stopTeamRefresh(){
-  if(teamRefreshTimer){clearInterval(teamRefreshTimer);teamRefreshTimer=null;}
-}
-
-async function loadHuntData(){
-  const status=document.getElementById("huntStatus");
-  status.textContent="正在读取地图……";
-  document.getElementById("maps").innerHTML="";
-  selectedMap=null; selectedMonster=null;
-  const {data,error}=await db.from("game_regions").select("*").order("id",{ascending:true});
-  if(error){status.innerHTML="<span class='err'>读取地图失败："+escapeHtml(error.message)+"</span>";return;}
-  maps=data||[];
-  if(!maps.length){status.textContent="目前没有地图数据。请先在 Supabase 的 game_regions 表中添加地图。";return;}
-  status.textContent="点击地图进入该区域，然后会弹出狩猎窗口。";
-  renderMaps();
-}
-function mapName(m){return m.name ?? m.region_name ?? m.title ?? m.location_name ?? m.region_key ?? ("地图 #"+m.id)}
-function mapDesc(m){return m.description ?? m.desc ?? "暂无地图说明"}
-function mapDanger(m){const n=Number(m.danger_level);return Number.isFinite(n)?n:0}
-function renderMaps(){
-  document.getElementById("maps").innerHTML=maps.map(m=>`
-    <div class="mapItem">
-      <b>${escapeHtml(m.icon||"🗺️")} ${escapeHtml(mapName(m))}</b>
-      <span class="badge">危险度 ${mapDanger(m)}</span>
-      <p class="muted">${escapeHtml(mapDesc(m))}</p>
-      ${m.is_initial?`<p class="small ok">✦ 初始区域</p>`:""}
-      <button class="primary" onclick="selectMap('${escapeJs(String(m.id))}')">进入地图 →</button>
-    </div>`).join("");
-}
-
-async function selectMap(id){
-  selectedMap=maps.find(m=>String(m.id)===String(id))||null;
-  if(!selectedMap)return;
-
-  const inTeam=!!activeTeam;
-  document.getElementById("huntModalTitle").textContent="🗺️ "+mapName(selectedMap)+" · "+(inTeam?"队伍遭遇":"单人遭遇");
-  document.getElementById("huntModalDesc").textContent=mapDesc(selectedMap)+"　危险度："+mapDanger(selectedMap);
-  document.getElementById("huntModalMsg").textContent="🎲 正在进行遭遇检定……";
-  document.getElementById("encounters").innerHTML="<p class='muted'>🎲 d20 遭遇检定中……</p>";
-  document.getElementById("encounterStartBtn").disabled=true;
-  document.getElementById("huntModalBack").classList.add("show");
-
-  await refreshTeam();
-
-  const {data,error}=await db.from("monster_drops").select("*").order("monster_id",{ascending:true});
-  if(error){
-    document.getElementById("encounters").innerHTML="<p class='err'>读取魔物失败："+escapeHtml(error.message)+"</p>";
-    return;
-  }
-  const grouped={};
-  (data||[]).forEach(drop=>{
-    if(drop.monster_id==null)return;
-    (grouped[String(drop.monster_id)]??=[]).push(drop);
-  });
-  monsters=Object.keys(grouped).map(mid=>({id:mid,monster_id:mid,drops:grouped[mid]}));
-  if(!monsters.length){
-    document.getElementById("encounters").innerHTML="<p class='muted'>目前没有可遇到的魔物。</p>";
-    return;
-  }
-
-  // 地图进入后一定随机遇怪，不让玩家挑怪。
-  const encounterRoll=d20();
-  const index=(encounterRoll-1)%monsters.length;
-  selectedMonster=monsters[index];
-
-  // 遭遇难度由地图危险度决定；嗅觉/魔力感知可以帮助“发现”。
-  const senseBonus=Number(currentAdventurer?.smell||0)+Math.floor(Number(currentAdventurer?.magic_sense||0)/2);
-  const encounterTarget=8+mapDanger(selectedMap)*2;
-  const encounterTotal=encounterRoll+senseBonus;
-  const noticed=encounterTotal>=encounterTarget;
-
-  const st=buildMonsterStats(selectedMonster,selectedMap);
-  document.getElementById("encounters").innerHTML=`
-    <div class="encounter selected">
-      <b>🎲 遭遇结果：${encounterRoll} + 嗅觉/魔力感知 ${senseBonus} = ${encounterTotal}</b>
-      <span class="badge">${noticed?"发现魔物":"勉强发现"}</span>
-      <h3 style="margin:10px 0 6px">👾 ${escapeHtml(monsterName(selectedMonster))} · Lv.${st.level}</h3>
-      <div class="statline"><span>❤️ HP</span><b>${st.maxHp}</b></div>
-      <div class="statline"><span>🛡️ 防御</span><b>${st.defense}</b></div>
-      <div class="statline"><span>⚔️ 攻击</span><b>${st.attack}</b></div>
-      <div class="statline"><span>💨 速度</span><b>${st.speed}</b></div>
-      <p class="small muted">可能发现：${escapeHtml((selectedMonster.drops||[]).map(d=>d.item_name).filter(Boolean).slice(0,5).join("、")||"未知素材")}</p>
-    </div>`;
-
-  renderEncounterTeamSummary();
-  document.getElementById("huntModalMsg").textContent=
-    inTeam ? "👥 队伍遭遇成立！所有队员的属性会参与本次跑团战斗。"
-           : "🧑 单人遭遇成立！你的六项属性决定战斗检定。";
-  document.getElementById("encounterStartBtn").disabled=false;
-}
-
-function closeHuntModal(){document.getElementById("huntModalBack").classList.remove("show")}
-function monsterName(m){return m.name ?? m.monster_name ?? m.title ?? ("魔物 #"+m.monster_id)}
-function chooseEncounter(id){
-  selectedMonster=monsters.find(m=>String(m.id)===String(id))||null;
-  document.querySelectorAll('.encounter').forEach(e=>e.classList.remove('selected'));
-  const el=document.getElementById("enc_"+id);if(el)el.classList.add("selected");
-  document.getElementById("encounterStartBtn").disabled=!selectedMonster;
-  document.getElementById("huntModalMsg").textContent=selectedMonster?"已选择「"+monsterName(selectedMonster)+"」。确认后进入回合制战斗。":"";
-}
-function hashId(v){let n=0;for(const c of String(v)){n=(n*31+c.charCodeAt(0))%997}return n}
-function buildMonsterStats(m,map){
-  const danger=Math.max(0,mapDanger(map));
-  const level=Math.max(1,danger+1+(hashId(m.id)%3));
-  return {level,maxHp:50+level*18+(hashId(m.id)%16),attack:7+level*3+(hashId(m.id)%5),defense:3+Math.floor(level*1.5),speed:5+level+(hashId(m.id)%4),crit:5+level*0.7};
-}
-function statMod(v){
-  // 跑团感：属性 6~10 左右时，修正值大约 -2~0；高属性会逐渐产生明显优势。
-  return Math.floor((Number(v||0)-6)/2);
-}
-function d20(){return Math.floor(Math.random()*20)+1}
-function d6(){return Math.floor(Math.random()*6)+1}
-function rollCheck(label,attribute,target,extra=0){
-  const raw=d20(), mod=statMod(attribute), total=raw+mod+extra;
-  const crit=raw===20, fumble=raw===1;
-  addBattleLog(`🎲 ${label}：d20(${raw}) + 属性修正(${mod})${extra?` + 协作(${extra})`:``} = ${total}，目标 ${target}`);
-  return {raw,mod,total,crit,fumble,success:crit||(!fumble&&total>=target)};
-}
-function buildPlayerStats(a){
-  const technique=Number(a.technique||0);
-  const endurance=Number(a.endurance||0);
-  const taste=Number(a.taste||0);
-  const magic=Number(a.magic_sense||0);
-  const smell=Number(a.smell||0);
-  const proficiency=Number(a.proficiency||0);
-  return {
-    technique,endurance,taste,magic,smell,proficiency,
-    maxHp:30+endurance*5,
-    attack:4+technique,
-    defense:8+endurance,
-    magicAttack:4+magic+Math.floor(taste/2),
-    initiative:5+smell,
-    crit:5+smell*2
-  };
-}
-let battle=null;
-let activeTeam=null;
-let teamMembers=[];
-let teamRefreshTimer=null;
-
-async function refreshTeam(){
-  if(!currentUser)return;
-  const msg=document.getElementById("teamMsg");
-  if(!msg)return;
-
-  const {data,error}=await db.from("hunt_team_members")
-    .select("team_id,player_id,member_name,joined_at,hunt_teams(id,code,status,leader_id)")
-    .eq("player_id",currentUser.id);
-
-  if(error){
-    msg.textContent="组队读取失败："+error.message+"（请检查 Supabase 的组队表/RLS）";
-    activeTeam=null; teamMembers=[];
-    renderTeamMembers();
-    return;
-  }
-
-  const row=(data||[]).find(x=>x.hunt_teams?.status==="active");
-  activeTeam=row?.hunt_teams||null;
-  if(activeTeam){
-    await loadTeamMembers(activeTeam.id);
-    msg.textContent=`当前队伍：${activeTeam.code}　共 ${teamMembers.length} 人`;
-  }else{
-    teamMembers=[];
-    msg.textContent="当前未加入临时队伍。";
-  }
-  renderTeamMembers();
-}
-async function loadTeamMembers(teamId){
-  const {data,error}=await db.from("hunt_team_members")
-    .select("player_id,member_name,joined_at")
-    .eq("team_id",teamId)
-    .order("joined_at",{ascending:true});
-  if(error){
-    teamMembers=[];
-    const el=document.getElementById("teamMembers");
-    if(el)el.innerHTML=`<p class="err small">成员读取失败：${escapeHtml(error.message)}</p>`;
-    return;
-  }
-  teamMembers=data||[];
-}
-function renderTeamMembers(){
-  const el=document.getElementById("teamMembers");
-  if(!el)return;
-  if(!activeTeam){
-    el.innerHTML="<p class='small muted'>还没有临时队伍。你也可以直接点地图单人狩猎。</p>";
-    return;
-  }
-  el.innerHTML=`<div class="small muted">👥 队伍成员</div>`+
-    (teamMembers.length?teamMembers.map((m,i)=>`
-      <div class="teamMember">
-        <b>${i===0?"👑 ":"🧑 "}${escapeHtml(m.member_name||"冒险者")}${String(m.player_id)===String(currentUser.id)?"（你）":""}</b>
-        <span class="small muted">成员 ${i+1}</span>
-      </div>`).join("")
-    :"<p class='small muted'>暂无成员。</p>");
-}
-function renderEncounterTeamSummary(){
-  const title=document.getElementById("encounterModeTitle");
-  const desc=document.getElementById("encounterModeDesc");
-  const box=document.getElementById("encounterTeamSummary");
-  if(!title||!desc||!box)return;
-
-  if(!activeTeam){
-    title.textContent="🎲 单人遭遇";
-    desc.textContent="你的六项属性独立决定检定结果。";
-    box.innerHTML="";
-    return;
-  }
-  title.textContent=`👥 队伍遭遇 · ${activeTeam.code}`;
-  desc.textContent="临时组队不绑定长期关系；队伍人数会影响协作骰与稀有部件掉落。";
-  box.innerHTML=teamMembers.map(m=>`
-    <span class="stat">🧑 ${escapeHtml(m.member_name||"冒险者")}</span>
-  `).join("");
-}
-async function createHuntTeam(){
-  if(!currentUser)return;
-  const msg=document.getElementById("teamMsg");
-  await leaveHuntTeam(true);
-  const code=Math.random().toString(36).slice(2,6).toUpperCase();
-  const name=currentAdventurer?.name||currentUser.user_metadata?.nickname||"冒险者";
-
-  const {data,error}=await db.from("hunt_teams")
-    .insert({leader_id:currentUser.id,code,status:"active"})
-    .select().single();
-  if(error){
-    msg.textContent="创建失败："+error.message;
-    return;
-  }
-
-  const {error:e2}=await db.from("hunt_team_members")
-    .insert({team_id:data.id,player_id:currentUser.id,member_name:name});
-  if(e2){
-    msg.textContent="队伍已创建，但加入成员失败："+e2.message;
-    return;
-  }
-  activeTeam=data;
-  await loadTeamMembers(data.id);
-  msg.textContent=`队伍创建成功！邀请码：${code}　把这个码发给队友即可加入。`;
-  renderTeamMembers();
-}
-async function joinHuntTeam(){
-  if(!currentUser)return;
-  const code=document.getElementById("teamCodeInput").value.trim().toUpperCase();
-  const msg=document.getElementById("teamMsg");
-  if(!code){msg.textContent="请输入队伍邀请码。";return;}
-
-  const {data,error}=await db.from("hunt_teams")
-    .select("*").eq("code",code).eq("status","active").maybeSingle();
-  if(error){
-    msg.textContent="查找队伍失败："+error.message;
-    return;
-  }
-  if(!data){
-    msg.textContent="找不到这个临时队伍，确认邀请码是否正确。";
-    return;
-  }
-
-  await leaveHuntTeam(true);
-  const name=currentAdventurer?.name||currentUser.user_metadata?.nickname||"冒险者";
-  const {error:e}=await db.from("hunt_team_members")
-    .insert({team_id:data.id,player_id:currentUser.id,member_name:name});
-  if(e){
-    msg.textContent="加入失败："+e.message;
-    return;
-  }
-  activeTeam=data;
-  await loadTeamMembers(data.id);
-  msg.textContent=`已加入队伍：${code}`;
-  renderTeamMembers();
-}
-async function leaveHuntTeam(silent=false){
-  if(currentUser){
-    const {data}=await db.from("hunt_team_members")
-      .select("team_id").eq("player_id",currentUser.id);
-    for(const r of (data||[])){
-      await db.from("hunt_team_members").delete()
-        .eq("team_id",r.team_id).eq("player_id",currentUser.id);
-    }
-  }
-  activeTeam=null;
-  teamMembers=[];
-  renderTeamMembers();
-  if(!silent&&document.getElementById("teamMsg"))
-    document.getElementById("teamMsg").textContent="已离开临时队伍。";
-}
-function teamCoopBonus(){
-  return activeTeam ? Math.max(0,Math.min(4,teamMembers.length-1)) : 0;
-}
-function teamMemberCount(){
-  return activeTeam ? Math.max(1,teamMembers.length) : 1;
-}
-async function startBattle(){
-  if(!selectedMonster||!selectedMap||!currentAdventurer)return;
-  if(Number(currentAdventurer.action_points||0)<1){
-    document.getElementById("huntModalMsg").textContent="行动点不足，请先去客栈休息。";
-    document.getElementById("huntModalMsg").className="err";
-    return;
-  }
-  closeHuntModal();
-
-  const p=buildPlayerStats(currentAdventurer);
-  const m=buildMonsterStats(selectedMonster,selectedMap);
-  const coop=teamCoopBonus();
-  const partySize=teamMemberCount();
-
-  battle={
-    round:1,player:p,monster:m,
-    playerHp:p.maxHp,monsterHp:m.maxHp,
-    defending:false,weaknessKnown:false,ended:false,log:[],
-    teamSize:partySize,coopBonus:coop
-  };
-
-  document.getElementById("battleModalBack").classList.add("show");
-  document.getElementById("battleResult").style.display="none";
-  document.getElementById("battleCloseBtn").style.display="none";
-  document.getElementById("battleActions").style.display="grid";
-  document.getElementById("battleMonsterName").textContent="👾 "+monsterName(selectedMonster)+" Lv."+m.level;
-
-  addBattleLog(activeTeam
-    ? `👥 ${partySize} 人临时队伍进入「${mapName(selectedMap)}」。`
-    : `🧑 你独自进入「${mapName(selectedMap)}」。`);
-  addBattleLog("🎲 战斗采用 d20 跑团式检定：20 大成功，1 大失败。",true);
-  addBattleLog("六项属性：技巧=命中/攻击，耐力=HP/防御，味觉=弱点分析，嗅觉=先攻/暴击，魔力感知=魔法攻击，熟练度=战后掉落。",true);
-  updateBattleUI();
-  await consumeAPForBattle();
-}
-async function consumeAPForBattle(){
-  const fresh=currentAdventurer;
-  const newAP=Math.max(0,Number(fresh.action_points||0)-1);
-  const {data,error}=await db.from("adventurers").update({action_points:newAP})
-    .eq("user_id",currentUser.id).select().single();
-  if(error){
-    addBattleLog("❌ 行动点扣除失败，战斗取消。",true);
-    battle.ended=true;
-    return;
-  }
-  currentAdventurer=data;
-}
-function addBattleLog(text,important=false){
-  if(!battle)return;
-  battle.log.push((important?"【":"")+text+(important?"】":""));
-  const box=document.getElementById("battleLog");
-  box.innerHTML=battle.log.map(x=>"<div>"+escapeHtml(x)+"</div>").join("");
-  box.scrollTop=box.scrollHeight;
-}
-function updateBattleUI(){
-  if(!battle)return;
-  const p=battle.player,m=battle.monster;
-  document.getElementById("playerHpText").textContent=Math.max(0,Math.round(battle.playerHp))+" / "+p.maxHp;
-  document.getElementById("monsterHpText").textContent=Math.max(0,Math.round(battle.monsterHp))+" / "+m.maxHp;
-  document.getElementById("playerHpFill").style.width=(Math.max(0,battle.playerHp)/p.maxHp*100)+"%";
-  document.getElementById("monsterHpFill").style.width=(Math.max(0,battle.monsterHp)/m.maxHp*100)+"%";
-  document.getElementById("playerBattleStats").textContent=
-    `技巧 ${p.technique}　耐力 ${p.endurance}　味觉 ${p.taste}　熟练度 ${p.proficiency}`;
-  document.getElementById("monsterBattleStats").textContent=
-    `攻击 ${m.attack}　防御 ${m.defense}　速度 ${m.speed}`;
-  document.getElementById("battleRound").innerHTML=
-    `<b>第 ${battle.round} 回合</b><span>${battle.ended?"战斗结束":"轮到你行动"}</span>`;
-}
-function rollDamage(base){
-  return Math.max(1,Math.round(base+d6()-3));
-}
-async function battleAction(action){
-  if(!battle||battle.ended)return;
-  const p=battle.player,m=battle.monster;
-  const coop=battle.coopBonus||0;
-
-  if(action==='attack'){
-    const r=rollCheck("技巧攻击",p.technique,10+m.defense,coop);
-    if(r.fumble){
-      addBattleLog("💥 大失败！你失去平衡，本回合攻击落空。");
-    }else if(r.success){
-      let dmg=rollDamage(p.attack+(r.crit?4:0)+coop);
-      if(battle.weaknessKnown)dmg+=Math.max(1,Math.floor(p.taste/2));
-      battle.monsterHp-=dmg;
-      addBattleLog(`🗡️ 命中！造成 ${dmg} 点伤害${r.crit?"（大成功加成）":""}。`);
-    }else{
-      addBattleLog("🛡️ 未命中魔物。");
-    }
-
-  }else if(action==='skill'){
-    const r=rollCheck("魔力感知·魔法攻击",p.magic,11+m.defense,coop);
-    if(r.fumble){
-      addBattleLog("✨ 魔力失控！本回合没有造成伤害。");
-    }else if(r.success){
-      let dmg=rollDamage(p.magicAttack+2+(r.crit?5:0));
-      if(battle.weaknessKnown)dmg+=p.taste;
-      battle.monsterHp-=dmg;
-      addBattleLog(`✨ 魔力命中，造成 ${dmg} 点伤害。`);
-    }else{
-      addBattleLog("✨ 魔法没有突破魔物的防御。");
-    }
-
-  }else if(action==='defend'){
-    battle.defending=true;
-    const r=rollCheck("耐力防御",p.endurance,10,coop);
-    battle.guardPower=r.success?0.65:0.45;
-    addBattleLog(`🛡️ ${r.success?"防御成功":"防御姿态不稳"}：下次受击减伤 ${Math.round(battle.guardPower*100)}%。`);
-
-  }else if(action==='sense'){
-    const r=rollCheck("味觉·魔物弱点分析",p.taste,10+m.level,coop);
-    if(r.success){
-      battle.weaknessKnown=true;
-      addBattleLog("👅 成功解析弱点！后续攻击获得额外伤害。");
-    }else{
-      addBattleLog("👅 没能解析出明确弱点。");
-    }
-  }
-
-  updateBattleUI();
-  if(battle.monsterHp<=0){await finishBattle(true);return;}
-  await monsterTurn();
-}
-async function monsterTurn(){
-  if(!battle||battle.ended)return;
-  const p=battle.player,m=battle.monster;
-  const initiative=rollCheck("嗅觉·战斗直觉",p.smell,8+m.speed,battle.coopBonus||0);
-
-  // 成功的嗅觉检定可以躲避/抢先一步；失败则承受攻击。
-  if(initiative.success){
-    addBattleLog("👃 你提前察觉魔物动作，本回合闪避成功！");
-  }else{
-    const raw=d20();
-    const total=raw+Math.floor(m.speed/2);
-    const target=8+p.defense;
-    addBattleLog(`🎲 魔物攻击：d20(${raw}) + 速度修正 = ${total}，目标 ${target}`);
-    if(raw===1 || total<target){
-      addBattleLog("💨 魔物攻击落空！");
-    }else{
-      let dmg=rollDamage(m.attack);
-      const guard=battle.guardPower||0;
-      if(guard)dmg=Math.max(1,Math.floor(dmg*(1-guard)));
-      if(raw===20)dmg=Math.round(dmg*1.5);
-      battle.playerHp-=dmg;
-      addBattleLog(`👾 魔物命中，造成 ${dmg} 点伤害${raw===20?"（魔物大成功）":""}。`);
-    }
-  }
-
-  battle.guardPower=0;
-  if(battle.playerHp<=0){await finishBattle(false);return;}
-  battle.round++;
-  updateBattleUI();
-}
-async function finishBattle(win){
-  if(!battle||battle.ended)return;
-  battle.ended=true;
-  document.getElementById("battleActions").style.display="none";
-  document.getElementById("battleCloseBtn").style.display="block";
-
-  if(!win){
-    addBattleLog("💀 你被击倒了。此次狩猎失败。",true);
-    document.getElementById("battleResult").style.display="block";
-    document.getElementById("battleResult").textContent=
-      "狩猎失败\\n消耗：1 AP\\n剩余 AP："+(currentAdventurer?.action_points??0);
-    await recordHunt(false,0);
-    updateBattleUI();
-    return;
-  }
-
-  // 熟练度只负责“战后掉落检定”，越高越容易拿到更多/更好的素材。
-  const drops=selectedMonster.drops||[];
-  const prof=Math.max(0,Number(currentAdventurer?.proficiency||0));
-  const teamBonus=battle.teamSize||1;
-  let obtained=[];
-
-  const lootRoll=d20();
-  const lootTotal=lootRoll+Math.floor(prof/2)+Math.max(0,battle.coopBonus||0);
-  addBattleLog(`🎲 熟练度·掉落检定：d20(${lootRoll}) + 熟练度修正(${Math.floor(prof/2)}) + 协作(${battle.coopBonus||0}) = ${lootTotal}`,true);
-
-  const tries=lootTotal>=18?3:lootTotal>=12?2:1;
-  for(let i=0;i<tries;i++){
-    const d=weightedPick(drops);
-    if(!d||!d.item_name)continue;
-    const min=Math.max(1,Number(d.min_count??1)||1);
-    const max=Math.max(min,Number(d.max_count??min)||min);
-    const quantity=Math.floor(Math.random()*(max-min+1))+min;
-    const saved=await addInventoryItem(d.item_name,d.item_desc??"魔物掉落素材",quantity);
-    if(saved)obtained.push("📦 "+d.item_name+" ×"+quantity);
-  }
-
-  // 临时组队额外提高稀有部件检定。
-  if(teamBonus>1 && drops.length){
-    const rareTarget=Math.max(5,18-(teamBonus-1)*2);
-    const rareRoll=d20();
-    const rareTotal=rareRoll+Math.floor(prof/2);
-    addBattleLog(`🎲 协作稀有部件：d20(${rareRoll}) + 熟练度修正 ${Math.floor(prof/2)} = ${rareTotal}，目标 ${rareTarget}`);
-    if(rareTotal>=rareTarget){
-      const rare=drops.slice().sort((a,b)=>Number(a.drop_weight||999)-Number(b.drop_weight||999))[0];
-      if(rare?.item_name){
-        const saved=await addInventoryItem(rare.item_name,rare.item_desc??"协作狩猎发现的稀有部件",1);
-        if(saved)obtained.push("🟣 协作稀有部件："+rare.item_name+" ×1");
-      }
-    }
-  }
-
-  const rewardCoins=10+buildMonsterStats(selectedMonster,selectedMap).level*5;
-  const newCoins=Number(currentAdventurer?.coins||0)+rewardCoins;
-  const newScore=Number(currentAdventurer?.score||0)+10;
-  const {data}=await db.from("adventurers").update({coins:newCoins,score:newScore})
-    .eq("user_id",currentUser.id).select().single();
-  if(data)currentAdventurer=data;
-
-  await recordHunt(true,10);
-  addBattleLog("🏆 魔物被击败了！",true);
-  document.getElementById("battleResult").style.display="block";
-  document.getElementById("battleResult").textContent=
-    "🎉 狩猎成功！\\n\\n🏆 +10 分　💰 +"+rewardCoins+" 金币\\n🎁 掉落：\\n"+
-    (obtained.length?obtained.join("\\n"):"本次没有获得掉落物。")+
-    "\\n\\n⚡ 剩余 AP："+(currentAdventurer?.action_points??0);
-  updateBattleUI();
-}
-function closeBattleModal(){
-  document.getElementById("battleModalBack").classList.remove("show");
-  battle=null;
-  loadPanel();
-  refreshTeam();
-}
-function weightedPick(items){
-  const usable=items.filter(x=>Number(x.drop_weight??0)>0);
-  if(!usable.length)return items.length?items[Math.floor(Math.random()*items.length)]:null;
-  const total=usable.reduce((s,x)=>s+Number(x.drop_weight||0),0);
-  let r=Math.random()*total;
-  for(const item of usable){
-    r-=Number(item.drop_weight||0);
-    if(r<=0)return item;
-  }
-  return usable[usable.length-1];
-}
-
-async function recordHunt(success,score){try{await db.from("game_records").insert({user_id:currentUser.id,score:Number(score||0),level:Number(currentAdventurer?.level??1),correct_count:success?1:0,wrong_count:success?0:1})}catch(e){console.warn("game_records 写入失败",e)}}
-async function addInventoryItem(itemName,itemDesc,quantity){
-  const {data:existing,error:readError}=await db.from("inventory").select("id,item_name,item_desc,item_count,count").eq("player_id",currentUser.id).eq("item_name",itemName).limit(1);
-  if(readError){console.error(readError);return false}
-  if(existing&&existing.length){const item=existing[0];const oldCount=Number(item.item_count||0);const {error}=await db.from("inventory").update({item_count:oldCount+quantity,item_desc:item.item_desc||itemDesc}).eq("id",item.id);return !error}
-  const {error}=await db.from("inventory").insert({player_id:currentUser.id,item_name:itemName,item_desc:itemDesc,item_count:quantity});return !error;
-}
-function getItemCount(item){return Number(item.item_count ?? item.count ?? 0)}
-
-/* =========================
-   签到 / 客栈
-   ========================= */
-
-async function signin(){
-  const e=document.getElementById("signinMsg");
-  const {data,error}=await db.rpc("daily_signin");
-  if(error){e.textContent=error.message;e.className="err";return}
-  if(data===-1){e.textContent="今天已经签到过啦！";return}
-  e.textContent="签到成功！当前金币："+data;e.className="ok";
-  await loadAdventurer();
-}
-
-async function rest(){
-  const e=document.getElementById("restMsg");
-  const {data,error}=await db.rpc("rest_at_inn");
-  if(error){e.textContent=error.message;e.className="err";return}
-  if(data===-1){e.textContent="旅店冷却中，1小时后才能再次休息。";return}
-  e.textContent="休息成功！AP 已恢复到 "+data+"。";e.className="ok";
-  await loadAdventurer();
-}
-
-function escapeHtml(v){
-  return String(v??"").replace(/[&<>"']/g,c=>({
-    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
-  }[c]));
-}
-function escapeJs(v){
-  return String(v??"").replace(/\\/g,"\\\\").replace(/'/g,"\\'");
-}
-
-// 认证监听只负责在登录状态变化后切换界面。
-// 绝不在回调里调用 getUser/getSession，避免 Supabase Auth 锁导致“退出后无法再次登录”。
-db.auth.onAuthStateChange((event, session)=>{
-  if(event === "SIGNED_IN" && session?.user){
-    currentUser=session.user;
-    setTimeout(()=>{
-      if(!gameLoading && currentUser?.id===session.user.id){
-        loadGame(session.user);
-      }
-    },0);
-  }else if(event === "SIGNED_OUT"){
-    showLogin();
-  }
-});
-
-// 首次打开页面：读取已有 session；没有 session 就停在登录页。
-(async function initAuth(){
-  try{
-    const {data,error}=await db.auth.getSession();
-    if(error){
-      console.error("读取登录状态失败",error);
-      showLogin("登录状态读取失败，请重新登录。");
-      return;
-    }
-    if(data?.session?.user){
-      currentUser=data.session.user;
-      await loadGame(data.session.user);
-    }else{
-      showLogin();
-    }
-  }catch(e){
-    console.error("初始化登录状态异常",e);
-    showLogin("请登录后继续。");
-  }
-})();
-</script>
-</body>
-</html>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>谜之食谱世界｜狩猎版</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
+    </script>
+    <style>
+        * {
+            box-sizing: border-box
+        }
+        body {
+            margin: 0;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #f6f3ea;
+            color: #29251f
+        }
+        button,
+        input,
+        select {
+            font: inherit
+        }
+        button {
+            cursor: pointer
+        }
+        .wrap {
+            max-width: 900px;
+            margin: auto;
+            padding: 20px
+        }
+        .card {
+            background: #fff;
+            border-radius: 18px;
+            padding: 20px;
+            margin: 14px 0;
+            box-shadow: 0 4px 18px #0001
+        }
+        .row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center
+        }
+        .muted {
+            color: #777
+        }
+        .ok {
+            color: #16753a
+        }
+        .err {
+            color: #b3261e
+        }
+        input,
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            background: #fff
+        }
+        .primary {
+            background: #29251f;
+            color: #fff;
+            border: 0;
+            padding: 11px 15px;
+            border-radius: 10px
+        }
+        .secondary {
+            background: #eee9df;
+            color: #29251f;
+            border: 0;
+            padding: 11px 15px;
+            border-radius: 10px
+        }
+        .primary:disabled,
+        .secondary:disabled {
+            opacity: .55;
+            cursor: not-allowed
+        }
+        .stat {
+            display: inline-block;
+            background: #f1eee6;
+            border-radius: 12px;
+            padding: 10px 14px;
+            margin: 4px
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px
+        }
+        #game {
+            display: none
+        }
+        #userBox {
+            display: none
+        }
+        .app {
+            display: none
+        }
+        .topbar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px
+        }
+        .menuBtn {
+            font-size: 22px;
+            padding: 8px 12px;
+            background: #29251f;
+            color: #fff;
+            border: 0;
+            border-radius: 10px
+        }
+        .side {
+            position: fixed;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 270px;
+            background: #fff;
+            box-shadow: 4px 0 20px #0002;
+            z-index: 20;
+            padding: 22px 16px;
+            transform: translateX(-105%);
+            transition: .2s;
+            overflow-y: auto
+        }
+        .side.open {
+            transform: translateX(0)
+        }
+        .side h2 {
+            margin-top: 4px
+        }
+        .navbtn {
+            display: block;
+            width: 100%;
+            text-align: left;
+            border: 0;
+            background: #f3f0e8;
+            color: #29251f;
+            padding: 14px;
+            border-radius: 12px;
+            margin: 8px 0
+        }
+        .navbtn.active {
+            background: #29251f;
+            color: #fff
+        }
+        .navbtn.admin {
+            border-left: 4px solid #b3261e
+        }
+        .overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: #0005;
+            z-index: 19
+        }
+        .overlay.show {
+            display: block
+        }
+        .section {
+            display: none
+        }
+        .section.active {
+            display: block
+        }
+        .inventoryItem,
+        .monsterItem,
+        .mapItem {
+            border: 1px solid #e5e0d6;
+            border-radius: 14px;
+            padding: 14px;
+            margin: 10px 0
+        }
+        .inventoryItem b,
+        .monsterItem b,
+        .mapItem b {
+            font-size: 17px
+        }
+        .badge {
+            float: right;
+            background: #29251f;
+            color: #fff;
+            border-radius: 999px;
+            padding: 3px 9px;
+            font-size: 13px
+        }
+        .mapItem.selected {
+            border: 2px solid #29251f;
+            background: #f8f6f0
+        }
+        .modalBack {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: #0007;
+            z-index: 50;
+            align-items: center;
+            justify-content: center;
+            padding: 15px
+        }
+        .modalBack.show {
+            display: flex
+        }
+        .modal {
+            width: min(680px, 100%);
+            max-height: 92vh;
+            overflow: auto;
+            background: #fff;
+            border-radius: 20px;
+            padding: 22px
+        }
+        .attrGrid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px
+        }
+        .small {
+            font-size: 13px
+        }
+        .huntResult {
+            padding: 14px;
+            border-radius: 14px;
+            background: #f8f6f0;
+            margin-top: 12px;
+            white-space: pre-line
+        }
+        .battleHud {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin: 12px 0
+        }
+        .fighter {
+            border: 1px solid #e5e0d6;
+            border-radius: 16px;
+            padding: 14px;
+            background: #f8f6f0
+        }
+        .fighterTitle {
+            font-weight: 700;
+            font-size: 18px;
+            display: flex;
+            justify-content: space-between;
+            gap: 8px
+        }
+        .hpbar {
+            height: 12px;
+            background: #ddd6c9;
+            border-radius: 99px;
+            overflow: hidden;
+            margin: 8px 0
+        }
+        .hpfill {
+            height: 100%;
+            background: #29251f;
+            transition: width .25s
+        }
+        .battleLog {
+            height: 180px;
+            overflow: auto;
+            background: #171511;
+            color: #f8f6f0;
+            border-radius: 14px;
+            padding: 12px;
+            font-size: 14px;
+            line-height: 1.65
+        }
+        .battleActions {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 12px
+        }
+        .battleActions button {
+            min-height: 48px
+        }
+        .encounter {
+            border: 2px solid #e5e0d6;
+            border-radius: 16px;
+            padding: 14p
