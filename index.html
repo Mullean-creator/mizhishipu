@@ -1379,216 +1379,321 @@ async function rest(){
   e.textContent="休息成功！AP 已恢复到 "+data+"。";e.className="ok";
   await loadAdventurer();
 }
-
 /* =============================================================
    👑 GM 管理员后台设置功能逻辑
    ============================================================= */
+
 function showAdminPane(name){
   if(!isAdmin())return;
+
   ["recipes","players","self","maps"].forEach(x=>{
-    const pane=document.getElementById("adminPane"+x.charAt(0).toUpperCase()+x.slice(1));
-    const tab=document.getElementById("adminTab"+x.charAt(0).toUpperCase()+x.slice(1));
+    const pane=document.getElementById(
+      "adminPane"+x.charAt(0).toUpperCase()+x.slice(1)
+    );
+    const tab=document.getElementById(
+      "adminTab"+x.charAt(0).toUpperCase()+x.slice(1)
+    );
+
     if(pane)pane.classList.toggle("active",x===name);
     if(tab)tab.classList.toggle("active",x===name);
   });
+
   if(name==="recipes")loadAdminRecipes();
   if(name==="players")loadAdminPlayers();
   if(name==="self")loadAdminSelfData();
   if(name==="maps")loadAdminPlayerMaps(true);
 }
 
+
 async function loadAdminDashboard(){
   if(!isAdmin()){
     alert("非法访问：你没有管理员权限！");
-    showSection('main');
+    showSection("main");
     return;
   }
+
   await loadAdminPlayers();
   await loadAdminRecipes();
   await loadAdminSelfData();
   await loadAdminPlayerMaps(true);
-  showAdminPane('recipes');
+
+  showAdminPane("recipes");
 }
 
+
+/* =============================================================
+   👥 GM 玩家管理
+   ============================================================= */
+
 async function loadAdminPlayers(){
-  const selects=[document.getElementById("adminPlayerSelect"),document.getElementById("adminMapPlayerSelect")];
-  const {data,error}=await db.from("adventurers").select("*").order("name",{ascending:true});
+  const selects=[
+    document.getElementById("adminPlayerSelect"),
+    document.getElementById("adminMapPlayerSelect")
+  ];
+
+  const {data,error}=await db
+    .from("adventurers")
+    .select("*")
+    .order("name",{ascending:true});
+
   if(error||!data){
-    selects.forEach(s=>{if(s)s.innerHTML="<option>获取玩家失败</option>";});
-    document.getElementById("adminPlayerMsg").textContent="读取玩家失败："+(error?.message||"未知错误");
+    selects.forEach(s=>{
+      if(s)s.innerHTML="<option>获取玩家失败</option>";
+    });
+
+    const msg=document.getElementById("adminPlayerMsg");
+    if(msg){
+      msg.textContent="读取玩家失败："+(error?.message||"未知错误");
+      msg.className="err";
+    }
     return;
   }
+
   allAdventurersList=data;
-  const html=data.map(a=>`<option value="${a.user_id}">${escapeHtml(a.name||"无名冒险者")}（${a.user_id.slice(0,8)}…）</option>`).join("");
-  selects.forEach(s=>{if(s)s.innerHTML=html;});
+
+  const html=data.map(a=>`
+    <option value="${escapeHtml(a.user_id)}">
+      ${escapeHtml(a.name||"无名冒险者")}（${escapeHtml(a.user_id.slice(0,8))}…）
+    </option>
+  `).join("");
+
+  selects.forEach(s=>{
+    if(s)s.innerHTML=html;
+  });
+
   onAdminSelectPlayer();
 }
 
+
+/* =============================================================
+   🛠️ GM 编辑字段
+   注意：adventurers 数据库没有 level，所以这里已经彻底删除 level
+   ============================================================= */
+
 function fillAdminFields(prefix,p){
-  const map={name:"name",age:"age",gender:"gender",height:"height",race:"race",job:"job",technique:"technique",endurance:"endurance",taste:"taste",proficiency:"proficiency",smell:"smell",magic_sense:"magic_sense",ap:"action_points",max_ap:"max_action_points",coins:"coins",level:"level"};
+  const map={
+    name:"name",
+    age:"age",
+    gender:"gender",
+    height:"height",
+    race:"race",
+    job:"job",
+
+    technique:"technique",
+    endurance:"endurance",
+    taste:"taste",
+    proficiency:"proficiency",
+    smell:"smell",
+    magic_sense:"magic_sense",
+
+    ap:"action_points",
+    max_ap:"max_action_points",
+    coins:"coins"
+  };
+
   Object.entries(map).forEach(([ui,key])=>{
     const el=document.getElementById(prefix+ui);
-    if(el)el.value=p?.[key]??(ui==="max_ap"?5:ui==="level"?1:0);
+    if(el){
+      el.value=p?.[key]??(
+        ui==="max_ap" ? 5 : 0
+      );
+    }
   });
 }
 
+
 function onAdminSelectPlayer(){
   const uid=document.getElementById("adminPlayerSelect")?.value;
-  const p=allAdventurersList.find(x=>x.user_id===uid);
-  if(p)fillAdminFields("adm_",p);
+
+  const p=allAdventurersList.find(
+    x=>String(x.user_id)===String(uid)
+  );
+
+  if(p){
+    fillAdminFields("adm_",p);
+  }
 }
+
 
 function collectAdminFields(prefix){
   return {
     name:document.getElementById(prefix+"name")?.value.trim(),
-    age:Number(document.getElementById(prefix+"age")?.value),
+    age:Number(document.getElementById(prefix+"age")?.value||0),
     gender:document.getElementById(prefix+"gender")?.value.trim(),
     height:document.getElementById(prefix+"height")?.value.trim(),
     race:document.getElementById(prefix+"race")?.value.trim(),
     job:document.getElementById(prefix+"job")?.value.trim(),
-    technique:Number(document.getElementById(prefix+"technique")?.value||0),
-    endurance:Number(document.getElementById(prefix+"endurance")?.value||0),
-    taste:Number(document.getElementById(prefix+"taste")?.value||0),
-    proficiency:Number(document.getElementById(prefix+"proficiency")?.value||0),
-    smell:Number(document.getElementById(prefix+"smell")?.value||0),
-    magic_sense:Number(document.getElementById(prefix+"magic_sense")?.value||0),
-    action_points:Number(document.getElementById(prefix+"ap")?.value||0),
-    max_action_points:Number(document.getElementById(prefix+"max_ap")?.value||5),
-    coins:Number(document.getElementById(prefix+"coins")?.value||0),
-    level:Number(document.getElementById(prefix+"level")?.value||1)
+
+    technique:Number(
+      document.getElementById(prefix+"technique")?.value||0
+    ),
+
+    endurance:Number(
+      document.getElementById(prefix+"endurance")?.value||0
+    ),
+
+    taste:Number(
+      document.getElementById(prefix+"taste")?.value||0
+    ),
+
+    proficiency:Number(
+      document.getElementById(prefix+"proficiency")?.value||0
+    ),
+
+    smell:Number(
+      document.getElementById(prefix+"smell")?.value||0
+    ),
+
+    magic_sense:Number(
+      document.getElementById(prefix+"magic_sense")?.value||0
+    ),
+
+    action_points:Number(
+      document.getElementById(prefix+"ap")?.value||0
+    ),
+
+    max_action_points:Number(
+      document.getElementById(prefix+"max_ap")?.value||5
+    ),
+
+    coins:Number(
+      document.getElementById(prefix+"coins")?.value||0
+    )
   };
 }
 
+
+/* =============================================================
+   💾 保存其他玩家
+   ============================================================= */
+
 async function saveAdminPlayerData(){
   if(!isAdmin())return;
-  const uid=document.getElementById("adminPlayerSelect").value;
+
+  const select=document.getElementById("adminPlayerSelect");
   const msgEl=document.getElementById("adminPlayerMsg");
+
+  const uid=select?.value;
+
+  if(!uid){
+    if(msgEl){
+      msgEl.textContent="请选择玩家。";
+      msgEl.className="err";
+    }
+    return;
+  }
+
   const updates=collectAdminFields("adm_");
-  if(!updates.name){msgEl.textContent="角色名字不能为空。";msgEl.className="err";return;}
-  const {data,error}=await db.from("adventurers").update(updates).eq("user_id",uid).select().single();
-  if(error){msgEl.textContent="保存失败："+error.message;msgEl.className="err";return;}
-  msgEl.textContent="✅ 玩家数据已保存。";msgEl.className="ok";
-  allAdventurersList=allAdventurersList.map(x=>x.user_id===uid?data:x);
-  if(uid===currentUser.id){currentAdventurer=data;await loadPanel();}
+
+  if(!updates.name){
+    msgEl.textContent="角色名字不能为空。";
+    msgEl.className="err";
+    return;
+  }
+
+  const {data,error}=await db
+    .from("adventurers")
+    .update(updates)
+    .eq("user_id",uid)
+    .select()
+    .single();
+
+  if(error){
+    msgEl.textContent="保存失败："+error.message;
+    msgEl.className="err";
+    console.error("GM保存玩家失败：",error);
+    return;
+  }
+
+  msgEl.textContent="✅ 玩家数据已保存。";
+  msgEl.className="ok";
+
+  allAdventurersList=allAdventurersList.map(x=>
+    String(x.user_id)===String(uid) ? data : x
+  );
+
+  if(String(uid)===String(currentUser.id)){
+    currentAdventurer=data;
+    await loadPanel();
+  }
 }
 
+
+/* =============================================================
+   ♾️ GM 给玩家无限行动点
+   ============================================================= */
+
 async function grantInfiniteAP(){
-  document.getElementById("adm_ap").value=9999;
-  document.getElementById("adm_max_ap").value=9999;
+  const ap=document.getElementById("adm_ap");
+  const maxAp=document.getElementById("adm_max_ap");
+
+  if(ap)ap.value=9999;
+  if(maxAp)maxAp.value=9999;
+
   await saveAdminPlayerData();
 }
 
+
+/* =============================================================
+   👑 GM 修改自己的角色
+   ============================================================= */
+
 async function loadAdminSelfData(){
   if(!isAdmin()||!currentUser)return;
+
   let p=currentAdventurer;
-  if(!p || p.user_id!==currentUser.id){
-    const {data}=await db.from("adventurers").select("*").eq("user_id",currentUser.id).maybeSingle();
-    if(data){p=data;currentAdventurer=data;}
+
+  if(!p||String(p.user_id)!==String(currentUser.id)){
+    const {data,error}=await db
+      .from("adventurers")
+      .select("*")
+      .eq("user_id",currentUser.id)
+      .maybeSingle();
+
+    if(error){
+      console.error("读取自己的GM数据失败：",error.message);
+    }
+
+    if(data){
+      p=data;
+      currentAdventurer=data;
+    }
   }
-  if(!p){document.getElementById("adminSelfMsg").textContent="你还没有冒险者角色，请先创建角色。";return;}
+
+  const msg=document.getElementById("adminSelfMsg");
+
+  if(!p){
+    if(msg){
+      msg.textContent="你还没有冒险者角色，请先创建角色。";
+      msg.className="err";
+    }
+    return;
+  }
+
   fillAdminFields("self_",p);
-  document.getElementById("adminSelfMsg").textContent="已读取当前 GM 角色："+(p.name||"无名冒险者");
+
+  if(msg){
+    msg.textContent=
+      "已读取当前 GM 角色："+(p.name||"无名冒险者");
+    msg.className="muted";
+  }
 }
+
 
 async function saveAdminSelfData(){
   if(!isAdmin()||!currentUser)return;
+
   const msg=document.getElementById("adminSelfMsg");
   const updates=collectAdminFields("self_");
-  const {data,error}=await db.from("adventurers").update(updates).eq("user_id",currentUser.id).select().single();
-  if(error){msg.textContent="保存失败："+error.message;msg.className="err";return;}
-  currentAdventurer=data;
-  msg.textContent="✅ 我的 GM 数据已保存。";msg.className="ok";
-  await loadPanel();
-}
 
-async function setSelfInfiniteAP(){
-  document.getElementById("self_ap").value=9999;
-  document.getElementById("self_max_ap").value=9999;
-  await saveAdminSelfData();
-}
+  if(!updates.name){
+    msg.textContent="角色名字不能为空。";
+    msg.className="err";
+    return;
+  }
 
-async function loadAdminRecipes(){
-  const box=document.getElementById("adminRecipeList");
-  if(!box)return;
-  box.innerHTML="<p class='muted'>读取料理提交中……</p>";
-  const {data,error}=await db.from("recipe_submissions").select("*").order("created_at",{ascending:false});
-  if(error){box.innerHTML=`<p class='err'>读取失败：${escapeHtml(error.message)}</p>`;return;}
-  if(!data?.length){box.innerHTML="<p class='muted'>目前暂无料理提交记录。</p>";return;}
-  box.innerHTML=data.map(r=>{
-    const pending=r.status==="pending";
-    const requested=r.requested_map_name||"未指定";
-    return `<div class="adminRecipeCard ${pending?'pending':''}">
-      <div class="row" style="justify-content:space-between">
-        <b>🍳 ${escapeHtml(r.recipe_name||"未命名料理")}</b>
-        <span class="badge ${r.status==='approved'?'ok':r.status==='rejected'?'err':''}">${r.status==='approved'?'✅ 已通过':r.status==='rejected'?'❌ 已拒绝':'⏳ 待审核'}</span>
-      </div>
-      <div class="adminStat">提交者：${escapeHtml(r.author_name||"未知玩家")}</div>
-      <div class="adminStat">申请解锁：<b>${escapeHtml(requested)}</b></div>
-      <p>${escapeHtml(r.recipe_desc||r.description||"暂无描述")}</p>
-      ${pending?`<div class="row">
-        <button class="primary" onclick="approveRecipe('${escapeJs(r.id)}')">✅ 审核通过并解锁该玩家地图</button>
-        <button class="danger" onclick="rejectRecipe('${escapeJs(r.id)}')">❌ 驳回</button>
-      </div>`:`<p class="small muted">${r.status==='approved'?'已审核并处理地图权限。':'该提交已结束审核。'}</p>`}
-    </div>`;
-  }).join("");
-}
-
-async function approveRecipe(recipeId){
-  if(!isAdmin())return;
-  const recipe=(await db.from("recipe_submissions").select("*").eq("id",recipeId).single()).data;
-  if(!recipe){alert("找不到这条料理提交。");return;}
-  const mapToUnlock=recipe.requested_map_name;
-  if(!mapToUnlock){alert("这条料理没有指定申请解锁地图，无法自动解锁。");return;}
-  if(!confirm(`确定通过「${recipe.recipe_name}」并给玩家「${recipe.author_name||"未知玩家"}」解锁「${mapToUnlock}」吗？`))return;
-  const {error:updateError}=await db.from("recipe_submissions").update({status:"approved",unlocked_map_name:mapToUnlock,reviewed_by:currentUser.id,reviewed_at:new Date().toISOString()}).eq("id",recipeId);
-  if(updateError){alert("审核保存失败："+updateError.message);return;}
-  const {error:mapError}=await db.from("player_unlocked_maps").upsert({user_id:recipe.user_id,map_name:mapToUnlock,unlocked_by_recipe:recipeId,unlocked_by:currentUser.id},{onConflict:"user_id,map_name"});
-  if(mapError){alert("料理已通过，但地图解锁失败："+mapError.message);await loadAdminRecipes();return;}
-  alert(`审核通过！已给「${recipe.author_name||"该玩家"}」解锁：${mapToUnlock}`);
-  await loadAdminRecipes();
-}
-
-async function rejectRecipe(recipeId){
-  if(!isAdmin())return;
-  const reason=prompt("可以填写驳回原因（可留空）：","");
-  const {error}=await db.from("recipe_submissions").update({status:"rejected",reviewed_by:currentUser.id,reviewed_at:new Date().toISOString()}).eq("id",recipeId);
-  if(error){alert("驳回失败："+error.message);return;}
-  await loadAdminRecipes();
-}
-
-async function loadAdminPlayerMaps(initial=false){
-  if(!isAdmin())return;
-  const select=document.getElementById("adminMapPlayerSelect");
-  if(!select)return;
-  if(initial && !select.options.length)await loadAdminPlayers();
-  const uid=select.value||currentUser?.id;
-  if(uid)select.value=uid;
-  const box=document.getElementById("adminPlayerMaps");
-  if(!box)return;
-  const {data,error}=await db.from("player_unlocked_maps").select("*").eq("user_id",uid).order("map_name");
-  if(error){box.innerHTML=`<p class='err'>读取地图权限失败：${escapeHtml(error.message)}</p>`;return;}
-  const unlocked=new Set((data||[]).map(x=>x.map_name));
-  const {data:allMaps}=await db.from("game_regions").select("*").order("id",{ascending:true});
-  let mapsForAdmin=allMaps||[];
-  if(!mapsForAdmin.length)mapsForAdmin=[{name:"美食镇"},{name:"雨林"},{name:"烈焰火山"},{name:"深海冰洞"}];
-  const extra=mapsForAdmin.filter(m=>!DEFAULT_UNLOCKED_MAPS.includes(mapName(m)));
-  box.innerHTML=`<div class="small muted">已解锁额外地图：</div>`+
-    (data?.length?data.map(x=>`<span class="stat">🗺️ ${escapeHtml(x.map_name)}</span>`).join(""):"<p class='muted'>暂无额外解锁（美食镇、雨林属于默认开放）。</p>")+
-    `<hr><div class="small muted">手动给该玩家解锁：</div>`+
-    extra.map(m=>{const n=mapName(m);return `<div class="row" style="margin-top:8px;justify-content:space-between"><span>${escapeHtml(m.icon||"🗺️")} ${escapeHtml(n)}</span><button class="secondary" ${unlocked.has(n)?'disabled':''} onclick="grantPlayerMap('${escapeJs(uid)}','${escapeJs(n)}')">${unlocked.has(n)?'已解锁':'🔓 解锁给该玩家'}</button></div>`}).join("");
-}
-
-async function grantPlayerMap(uid,mapNameValue){
-  if(!isAdmin())return;
-  if(!uid||!mapNameValue)return;
-  if(!confirm(`确定给该玩家解锁「${mapNameValue}」吗？`))return;
-  const {error}=await db.from("player_unlocked_maps").upsert({user_id:uid,map_name:mapNameValue,unlocked_by:currentUser.id},{onConflict:"user_id,map_name"});
-  if(error){alert("解锁失败："+error.message);return;}
-  alert("地图解锁成功："+mapNameValue);
-  await loadAdminPlayerMaps();
-}
-
-async function loadRecipeMapOptions(){
+  const {data,error}=await db
+    .from("adventurers
   const sel=document.getElementById("recipeMapRequest");
   if(!sel)return;
   const {data}=await db.from("game_regions").select("*").order("id",{ascending:true});
