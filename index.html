@@ -328,7 +328,7 @@ const db=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
    👑 管理员邮箱配置 (在此填入允许开启 GM 后台的账号邮箱)
    ------------------------------------------------------------- */
 const ADMIN_EMAILS = [
-  "admin@example.com", // 替换为你自己的邮箱地址
+  "admin@example.com", // ← 改成你的专用 GM 管理员邮箱
 ];
 
 /* -------------------------------------------------------------
@@ -711,7 +711,7 @@ async function loadRecipeList(){
     <div class="recipeItem">
       <span class="badge ${r.status==='approved'?'ok':r.status==='rejected'?'err':''}">${r.status==='approved'?'✅ 已审核通过':r.status==='rejected'?'❌ 未通过':'⏳ 待审核'}</span>
       <b>🍳 ${escapeHtml(r.recipe_name)}</b>
-      <p class="small muted">${escapeHtml(r.recipe_desc)}</p>
+      <p class="small muted">${escapeHtml(r.description ?? r.recipe_desc ?? "")}</p>
       ${r.unlocked_map_name ? `<p class="small ok">🗺️ 已解锁地图：${escapeHtml(r.unlocked_map_name)}</p>` : ''}
     </div>
   `).join("");
@@ -1270,10 +1270,10 @@ function weightedPick(items){
 async function recordHunt(success,score){try{await db.from("game_records").insert({user_id:currentUser.id,score:Number(score||0),level:Number(currentAdventurer?.level??1),correct_count:success?1:0,wrong_count:success?0:1})}catch(e){console.warn("game_records 写入失败",e)}}
 
 async function addInventoryItem(itemName,itemDesc,quantity){
-  const {data:existing,error:readError}=await db.from("inventory").select("id,item_name,item_desc,item_count,count").eq("player_id",currentUser.id).eq("item_name",itemName).limit(1);
+  const {data:existing,error:readError}=await db.from("inventory").select("id,item_name,item_desc,count").eq("player_id",currentUser.id).eq("item_name",itemName).limit(1);
   if(readError){console.error(readError);return false}
   if(existing&&existing.length){const item=existing[0];const oldCount=Number(item.item_count||0);const {error}=await db.from("inventory").update({item_count:oldCount+quantity,item_desc:item.item_desc||itemDesc}).eq("id",item.id);return !error}
-  const {error}=await db.from("inventory").insert({player_id:currentUser.id,item_name:itemName,item_desc:itemDesc,item_count:quantity});return !error;
+  const {error}=await db.from("inventory").insert({player_id:currentUser.id,item_name:itemName,item_desc:itemDesc,count:quantity});return !error;
 }
 function getItemCount(item){return Number(item.item_count ?? item.count ?? 0)}
 
@@ -1387,8 +1387,8 @@ async function loadAdminRecipes(){
   box.innerHTML = data.map(r => `
     <div class="recipeItem">
       <span class="badge ${r.status==='approved'?'ok':''}">${r.status==='approved'?'✅ 已审核解锁':r.status==='rejected'?'❌ 已拒绝':'⏳ 待审核'}</span>
-      <b>🍳 ${escapeHtml(r.recipe_name)}</b> <span class="small muted">(提交者：${escapeHtml(r.author_name)})</span>
-      <p class="small">${escapeHtml(r.recipe_desc)}</p>
+      <b>🍳 ${escapeHtml(r.recipe_name)}</b>
+      <p class="small">${escapeHtml(r.description ?? r.recipe_desc ?? "")}</p>
 
       ${r.status==='pending'? `
         <div class="row" style="margin-top:8px">
@@ -1408,7 +1408,7 @@ async function approveRecipe(recipeId){
   const mapToUnlock = select.value;
 
   // 1. 更新料理记录
-  await db.from("recipe_submissions").update({ status: "approved", unlocked_map_name: mapToUnlock }).eq("id", recipeId);
+  await db.from("recipe_submissions").update({ status: "approved", reviewed_by: currentUser.id, reviewed_at: new Date().toISOString() }).eq("id", recipeId);
 
   // 2. 插入全服解锁表
   await db.from("unlocked_maps").insert({ map_name: mapToUnlock, unlocked_by_recipe: recipeId });
