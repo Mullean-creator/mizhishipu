@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>谜之食谱世界｜GM管理员与图鉴版</title>
+<title>谜之食谱世界｜西幻美食探索</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box}
@@ -298,7 +298,7 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
   <button id="navRecipe" class="navbtn" onclick="showSection('recipe')">🍳 提交料理</button>
 
   <!-- GM管理员后台入口，仅授权账号可见 -->
-  <button id="navAdmin" class="navbtn adminNav" style="display:none;" onclick="showSection('admin')">👑 GM后台设置</button>
+  <button id="navAdmin" class="navbtn adminNav" style="display:none;" onclick="openAdminPage()">👑 GM后台设置</button>
 
   <hr>
   <button class="navbtn" onclick="closeSide()">✕ 关闭菜单</button>
@@ -1634,6 +1634,159 @@ db.auth.onAuthStateChange((event, session)=>{
     showLogin("请登录后继续。");
   }
 })();
+
+// =============================
+// 管理员权限检查
+// =============================
+async function checkAdmin() {
+  try {
+    // 获取当前登录用户
+    const { data: { user }, error: userError } =
+      await supabase.auth.getUser();
+
+    if (userError || !user) {
+      alert("请先登录！");
+      return false;
+    }
+
+    // 查询管理员表
+    const { data, error } = await supabase
+      .from("admins")
+      .select("role")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (error) {
+      console.error("管理员权限查询失败：", error);
+      alert("管理员权限查询失败：\n" + error.message);
+      return false;
+    }
+
+    // 没有管理员记录
+    if (!data) {
+      alert("没有管理员权限");
+      return false;
+    }
+
+    // 允许两个管理员等级
+    if (data.role !== "admin" && data.role !== "super_admin") {
+      alert("没有管理员权限");
+      return false;
+    }
+
+    console.log("管理员验证成功：", data.role);
+
+    return true;
+
+  } catch (err) {
+    console.error(err);
+    alert("管理员权限检查发生错误");
+    return false;
+  }
+}
+
+<script>
+/* ================================
+   管理员权限系统
+   ================================ */
+
+async function checkAdmin() {
+    try {
+        const {
+            data: { user },
+            error: userError
+        } = await supabase.auth.getUser();
+
+        if (userError || !user) {
+            alert("请先登录！");
+            return false;
+        }
+
+        const { data, error } = await supabase
+            .from("admins")
+            .select("role")
+            .eq("user_id", user.id)
+            .maybeSingle();
+
+        if (error) {
+            console.error("管理员权限查询失败：", error);
+            alert("管理员权限查询失败：\n" + error.message);
+            return false;
+        }
+
+        if (!data) {
+            alert("没有管理员权限");
+            return false;
+        }
+
+        if (
+            data.role !== "admin" &&
+            data.role !== "super_admin"
+        ) {
+            alert("没有管理员权限");
+            return false;
+        }
+
+        console.log("管理员验证成功：", data.role);
+
+        return true;
+
+    } catch (error) {
+        console.error("管理员检查错误：", error);
+        alert("管理员权限检查发生错误");
+        return false;
+    }
+}
+
+
+/* 点击管理员页面 */
+async function openAdminPage() {
+
+    const isAdmin = await checkAdmin();
+
+    if (!isAdmin) {
+        return;
+    }
+
+    showSection("admin");
+}
+
+
+/* 页面加载后检查管理员按钮 */
+async function setupAdminButton() {
+
+    const {
+        data: { user }
+    } = await supabase.auth.getUser();
+
+    if (!user) return;
+
+    const { data } = await supabase
+        .from("admins")
+        .select("role")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+    if (!data) return;
+
+    if (
+        data.role === "admin" ||
+        data.role === "super_admin"
+    ) {
+
+        const adminButtons =
+            document.querySelectorAll(".adminNav");
+
+        adminButtons.forEach(button => {
+            button.style.display = "block";
+
+            button.onclick = function () {
+                openAdminPage();
+            };
+        });
+    }
+}
+</script>
 </script>
 </body>
 </html>
