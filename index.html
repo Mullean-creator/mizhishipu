@@ -391,9 +391,7 @@ const db=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 /* -------------------------------------------------------------
    👑 管理员邮箱配置 (在此填入允许开启 GM 后台的账号邮箱)
    ------------------------------------------------------------- */
-const ADMIN_EMAILS = [
-  "admin@example.com", // ← 改成你的专用 GM 管理员邮箱
-];
+const ADMIN_EMAILS = []; // 管理员现在由 Supabase 的 admins 表控制；此数组仅保留兼容，不再用于授权。
 
 /* -------------------------------------------------------------
    👾 预设怪物库 (后续你可以在这里自由替换/扩展怪物名字与掉落)
@@ -413,6 +411,8 @@ let monsters=[];
 let selectedMap=null;
 let selectedMonster=null;
 let allAdventurersList=[]; // 管理员GM控制台用
+let currentIsAdmin=false;
+let currentAdminRole=null;
 
 function msg(t,c="muted"){
   const e=document.getElementById("msg");
@@ -420,7 +420,23 @@ function msg(t,c="muted"){
 }
 
 function isAdmin(){
-  return currentUser && ADMIN_EMAILS.map(e=>e.toLowerCase()).includes((currentUser.email||"").toLowerCase());
+  return !!currentIsAdmin;
+}
+
+async function refreshAdminStatus(){
+  currentIsAdmin=false;
+  currentAdminRole=null;
+  if(!currentUser) return false;
+  const {data,error}=await db.from("admins").select("role").eq("user_id",currentUser.id).maybeSingle();
+  if(error){
+    console.warn("管理员权限读取失败：",error.message);
+    return false;
+  }
+  if(data){
+    currentIsAdmin=true;
+    currentAdminRole=data.role||"admin";
+  }
+  return currentIsAdmin;
 }
 
 async function signup(){
@@ -532,6 +548,7 @@ async function loadGame(userArg=null){
     if(!user){ showLogin(); return; }
 
     currentUser=user;
+    await refreshAdminStatus();
     document.getElementById("auth").style.display="none";
     document.getElementById("userBox").style.display="block";
     document.getElementById("game").style.display="block";
