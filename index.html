@@ -478,14 +478,14 @@ async function refreshAdminStatus(){
   currentIsAdmin=false;
   currentAdminRole=null;
   if(!currentUser) return false;
-  const {data,error}=await db.from("admins").select("role").eq("user_id",currentUser.id).maybeSingle();
+  const {data,error}=await db.from("admins").select("user_id").eq("user_id",currentUser.id).maybeSingle();
   if(error){
     console.warn("管理员权限读取失败：",error.message);
     return false;
   }
   if(data){
     currentIsAdmin=true;
-    currentAdminRole=data.role||"admin";
+    currentAdminRole="admin";
   }
   return currentIsAdmin;
 }
@@ -1760,54 +1760,11 @@ db.auth.onAuthStateChange((event, session)=>{
   }
 })();
 
-// =============================
-// 管理员权限检查
-// =============================
+// 管理员权限检查：与 refreshAdminStatus 保持一致，不依赖 admins.role 字段。
 async function checkAdmin() {
-  try {
-    // 获取当前登录用户
-    const { data: { user }, error: userError } =
-      await supabase.auth.getUser();
-
-    if (userError || !user) {
-      alert("请先登录！");
-      return false;
-    }
-
-    // 查询管理员表
-    const { data, error } = await supabase
-      .from("admins")
-      .select("role")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (error) {
-      console.error("管理员权限查询失败：", error);
-      alert("管理员权限查询失败：\n" + error.message);
-      return false;
-    }
-
-    // 没有管理员记录
-    if (!data) {
-      alert("没有管理员权限");
-      return false;
-    }
-
-    // 允许两个管理员等级
-    if (data.role !== "admin" && data.role !== "super_admin") {
-      alert("没有管理员权限");
-      return false;
-    }
-
-    console.log("管理员验证成功：", data.role);
-
-    return true;
-
-  } catch (err) {
-    console.error(err);
-    alert("管理员权限检查发生错误");
-    return false;
-  }
+  const ok=await refreshAdminStatus();
+  if(!ok) alert("没有管理员权限");
+  return ok;
 }
 </script>
 </body>
