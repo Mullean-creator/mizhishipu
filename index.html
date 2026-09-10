@@ -1522,16 +1522,16 @@ async function addInventoryItem(itemName,itemDesc,quantity){
   try{
     const qty=Math.max(1,Number(quantity)||1);
     const {data:existing,error:readError}=await db.from("inventory")
-      .select("id,item_name,item_desc,count")
+      .select("id,item_name,item_desc,item_count")
       .eq("player_id",currentUser.id)
       .eq("item_name",itemName)
       .limit(1);
     if(readError){console.error("读取 inventory 失败：",readError);return false;}
     if(existing&&existing.length){
       const item=existing[0];
-      const oldCount=Math.max(0,Number(item.count)||0);
+      const oldCount=Math.max(0,Number(item.item_count)||0);
       const {error}=await db.from("inventory")
-        .update({count:oldCount+qty,item_desc:item.item_desc||itemDesc})
+        .update({item_count:oldCount+qty,item_desc:item.item_desc||itemDesc})
         .eq("id",item.id)
         .eq("player_id",currentUser.id);
       if(error){console.error("更新 inventory 失败：",error);return false;}
@@ -1541,7 +1541,7 @@ async function addInventoryItem(itemName,itemDesc,quantity){
       player_id:currentUser.id,
       item_name:itemName,
       item_desc:itemDesc,
-      count:qty
+      item_count:qty
     });
     if(error){console.error("新增 inventory 失败：",error);return false;}
     return true;
