@@ -1417,7 +1417,7 @@ function openLootModal(){
   document.getElementById("lootRollBtn").style.display="block";
   document.getElementById("lootRollBtn").disabled=false;
   document.getElementById("lootTitle").textContent="🏆 "+monsterName(selectedMonster)+" 已击败！";
-  document.getElementById("lootDesc").textContent="熟练度用于掉落判定。请按下按钮投掷 D20，投出的数字会与熟练度修正及队伍协作共同决定掉落。";
+  document.getElementById("lootDesc").textContent="本次掉落 100% 获得素材。🎲 D20 点数越高，越容易拿到该魔物配置的稀有素材；骰子结果直接决定素材种类。";
   document.getElementById("lootRollResult").textContent="🎲 尚未投掷掉落骰。";
   document.getElementById("lootLog").innerHTML="";
 }
@@ -1426,27 +1426,46 @@ async function rollLoot(){
   if(!battle||!battle.ended||battle.lootFinished)return;
   const btn=document.getElementById("lootRollBtn");
   btn.disabled=true;
-  const drops=selectedMonster.drops||[];
-  const prof=Math.max(0,Number(currentAdventurer?.proficiency||0));
+  const drops=(selectedMonster?.drops||[]).filter(d=>d&&d.item_name);
   const roll=d20();
+  const prof=Math.max(0,Number(currentAdventurer?.proficiency||0));
   const profBonus=Math.floor(prof/2);
   const coop=Math.max(0,battle.coopBonus||0);
-  const total=roll+profBonus+coop;
-  let tier,tries;
-  if(total>=26){tier="✨ 极佳掉落";tries=3;}else if(total>=20){tier="🌟 稀有掉落";tries=2;}else if(total>=14){tier="🍖 良好掉落";tries=2;}else{tier="📦 普通掉落";tries=1;}
-  const lines=[`🎲 D20：${roll}`,`📈 熟练度修正：+${profBonus}`,`👥 队伍协作：+${coop}`,`⭐ 最终判定：${total}`,`
-${tier}`];
-  let obtained=[];
-  for(let i=0;i<tries;i++){
-    const d=weightedPick(drops);
-    if(!d||!d.item_name)continue;
-    const min=Math.max(1,Number(d.min_count??1)||1);
-    const max=Math.max(min,Number(d.max_count??min)||min);
-    const quantity=Math.floor(Math.random()*(max-min+1))+min;
-    const saved=await addInventoryItem(d.item_name,d.item_desc??"魔物掉落素材",quantity);
-    if(saved)obtained.push(`📦 ${d.item_name} ×${quantity}`);
+
+  // 100% 掉落：D20 的数字直接决定拿到哪一种素材。
+  // 不再使用 drop_weight 做“有没有掉落”的概率判断。
+  // 低骰面偏向普通素材，高骰面偏向稀有素材。
+  let chosen=null;
+  if(drops.length===1){
+    chosen=drops[0];
+  }else if(drops.length>1){
+    const sorted=[...drops].sort((a,b)=>Number(a.drop_weight??0)-Number(b.drop_weight??0));
+    const index=Math.min(sorted.length-1,Math.floor((roll/20)*sorted.length));
+    chosen=sorted[index];
   }
-  if(!obtained.length)obtained.push("本次没有成功写入背包的掉落物。");
+
+  const tier = roll>=18 ? "✨ 极佳掉落" : roll>=14 ? "🌟 稀有掉落" : roll>=8 ? "🍖 良好掉落" : "📦 普通掉落";
+  const lines=[
+    `🎲 D20：${roll}`,
+    `📈 熟练度修正：+${profBonus}`,
+    `👥 队伍协作：+${coop}`,
+    `⭐ 掉落判定：${tier}`,
+    `🎯 骰子结果决定素材：${chosen?.item_name||"无"}`
+  ];
+
+  let obtained=[];
+  if(chosen){
+    const min=Math.max(1,Number(chosen.min_count??1)||1);
+    const max=Math.max(min,Number(chosen.max_count??min)||min);
+    // 数量仍在该素材自己的数量范围内随机，但素材本身 100% 获得。
+    const quantity=Math.floor(Math.random()*(max-min+1))+min;
+    const saved=await addInventoryItem(chosen.item_name,chosen.item_desc??"魔物掉落素材",quantity);
+    if(saved)obtained.push(`📦 ${chosen.item_name} ×${quantity}`);
+    else obtained.push(`📦 ${chosen.item_name} ×${quantity}（写入背包失败，请检查 inventory 表权限）`);
+  }else{
+    obtained.push("⚠️ 该魔物没有配置掉落素材。");
+  }
+
   lines.push("\n🎁 获得：",...obtained);
   lines.push("\n⚡ 剩余 AP："+(currentAdventurer?.action_points??0));
   document.getElementById("lootRollResult").textContent=lines.join("\n");
