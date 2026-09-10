@@ -1203,7 +1203,7 @@ async function startBattle(){
 
   document.getElementById("battleModalBack").classList.add("show");
   document.getElementById("battleResult").style.display="none";
-  document.getElementById("battleCloseBtn").style.display="none";
+  // 这里原版本引用了不存在的 battleCloseBtn，会让 startBattle 在战斗窗口打开后立刻报错，导致 HP 一直停在 0 / 0。已移除该错误引用。
   document.getElementById("battleActions").style.display="grid";
 
   // 在战斗面板明确显示玩家角色名字与怪物名字
