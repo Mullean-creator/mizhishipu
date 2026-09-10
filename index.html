@@ -1006,7 +1006,7 @@ function buildMonsterStats(m,map){
   const level=m.level || Math.max(1,danger+1+(hashId(m.id)%3));
   return {
     level,
-    maxHp: m.hp || (50+level*18+(hashId(m.id)%16)),
+    maxHp:Math.max(1,Number(m.hp)|| (50+level*18+(hashId(m.id)%16))),
     attack: m.atk || (7+level*3+(hashId(m.id)%5)),
     defense: m.def || (3+Math.floor(level*1.5)),
     speed: 5+level+(hashId(m.id)%4)
@@ -1033,7 +1033,7 @@ function buildPlayerStats(a){
   const proficiency=Number(a.proficiency||0);
   return {
     technique,endurance,taste,magic,smell,proficiency,
-    maxHp:30+endurance*5,
+    maxHp:Math.max(30,30+endurance*5),
     attack:4+technique,
     defense:8+endurance,
     magicAttack:4+magic+Math.floor(taste/2),
@@ -1222,15 +1222,21 @@ async function startBattle(){
     awaitingDodge:false,awaitingSense:false,pendingDodge:null,lootFinished:false
   };
 
+  // 先显示并刷新 HP，再写战斗日志。这样即使地图名称/队伍提示异常，也不会出现 0 / 0。
   document.getElementById("battleModalBack").classList.add("show");
   document.getElementById("battleResult").style.display="none";
   document.getElementById("battleActions").style.display="grid";
   document.getElementById("battlePlayerName").textContent=currentAdventurer.name||"冒险者";
   document.getElementById("battleMonsterName").textContent=(selectedMonster.icon||"👾")+" "+monsterName(selectedMonster)+" Lv."+m.level;
-  addBattleLog(activeTeam?`👥 ${partySize} 人临时队伍进入「${mapName(selectedMap)}」。`:`🧑 你独自进入「${mapName(selectedMap)}」。`);
+  updateBattleUI();
+  try{
+    addBattleLog(activeTeam?`👥 ${partySize} 人临时队伍进入「${mapName(selectedMap)}」。`:`🧑 你独自进入「${mapName(selectedMap)}」。`);
+  }catch(e){
+    console.warn("战斗提示生成失败：",e);
+    addBattleLog("🗺️ 已进入战斗。",true);
+  }
   addBattleLog("⚡ 进入战斗，已消耗 1 AP；逃跑不会返还 AP。",true);
   addBattleLog("🎲 规则：你行动一次 → 魔物行动一次。魔物攻击时由你选择闪避、防御、吃血药或逃跑。",true);
-  updateBattleUI();
 }
 
 function addBattleLog(text,important=false){
