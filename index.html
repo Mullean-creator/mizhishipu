@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>谜之食谱世界｜西幻美食探索</title>
+<title>🍲 谜之食谱世界 · 美食镇与 Buff 新版</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box}
@@ -109,6 +109,43 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
         <p class="muted">在这里休息，恢复行动点。</p>
         <button class="primary" onclick="rest()">休息并恢复到最大 AP</button>
         <p id="restMsg" class="muted"></p>
+      </div>
+    </div>
+
+    <!-- 2. 美食镇 -->
+    <div id="townSection" class="section">
+      <div class="card">
+        <h2>🏘️ 美食镇</h2>
+        <p class="muted">冒险者们补给、休息与交流的起点。这里的功能目前以轻量玩法为主。</p>
+        <div class="grid">
+          <button class="primary" onclick="townOpen('shop')">🛒 商店</button>
+          <button class="secondary" onclick="townOpen('npc')">🧑‍🍳 NPC</button>
+          <button class="secondary" onclick="townOpen('guild')">🛡️ 冒险者公会</button>
+          <button class="secondary" onclick="townOpen('inn')">🛏️ 客栈</button>
+        </div>
+        <div id="townContent" class="huntResult" style="margin-top:14px">选择一个设施看看。</div>
+      </div>
+    </div>
+
+    <!-- 3. 美食 Buff -->
+    <div id="buffSection" class="section">
+      <div class="card">
+        <h2>🍲 美食 Buff</h2>
+        <p class="muted">你可以随机抽取料理 Buff，也可以给自己的魔物料理设计一个专属 Buff。Buff 目前保存于本机，不需要新增 Supabase 表。</p>
+        <button class="primary" onclick="drawFoodBuff()">🎲 随机抽取 Buff</button>
+        <div id="drawBuffResult" class="huntResult">还没有抽取 Buff。</div>
+      </div>
+      <div class="card">
+        <h3>✍️ 自定义魔物料理 Buff</h3>
+        <input id="customBuffDish" placeholder="料理名称，例如：炙烤史莱姆排"><br><br>
+        <input id="customBuffName" placeholder="Buff 名称，例如：黏液护盾"><br><br>
+        <textarea id="customBuffDesc" rows="3" placeholder="Buff 效果描述，例如：受到攻击时有概率降低伤害。"></textarea><br><br>
+        <button class="primary" onclick="saveCustomBuff()">🍳 保存我的料理 Buff</button>
+        <div id="customBuffMsg" class="muted"></div>
+      </div>
+      <div class="card">
+        <h3>📜 我的料理 Buff</h3>
+        <div id="myBuffList"><p class="muted">暂无自定义 Buff。</p></div>
       </div>
     </div>
 
@@ -295,6 +332,8 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
   <button id="navInventory" class="navbtn" onclick="showSection('inventory')">🎒 我的背包</button>
   <button id="navBestiary" class="navbtn" onclick="showSection('bestiary')">📖 怪物图鉴</button>
   <button id="navHunt" class="navbtn" onclick="showSection('hunt')">⚔️ 地图 / 狩猎</button>
+  <button id="navTown" class="navbtn" onclick="showSection('town')">🏘️ 美食镇</button>
+  <button id="navBuff" class="navbtn" onclick="showSection('buff')">🍲 美食 Buff</button>
   <button id="navRecipe" class="navbtn" onclick="showSection('recipe')">🍳 提交料理</button>
 
   <!-- GM管理员后台入口，仅授权账号可见 -->
@@ -580,6 +619,8 @@ function showSection(name){
   if(name==="bestiary")loadBestiary();
   if(name==="hunt"){loadHuntData(); startTeamRefresh();}else{stopTeamRefresh();}
   if(name==="recipe"){loadRecipeList();loadRecipeMapOptions();}
+  if(name==="town"){townOpen('shop');}
+  if(name==="buff"){renderCustomBuffs();}
   if(name==="admin")loadAdminDashboard();
 }
 
@@ -1723,6 +1764,50 @@ async function loadRecipeMapOptions(){
   sel.innerHTML=available.length ? available.map(m=>`<option value="${escapeHtml(mapName(m))}">${escapeHtml(m.icon||"🗺️")} ${escapeHtml(mapName(m))}</option>`).join("") : `<option value="">目前没有可申请地图</option>`;
 }
 
+const FOOD_BUFF_POOL=[
+  ['香脆之力','攻击判定 +2','适合喜欢正面狩猎的料理。'],
+  ['猎人本能','遭遇判定 +2','更容易发现潜伏中的魔物。'],
+  ['黏液护盾','首次受到攻击时额外减伤','适合史莱姆系料理。'],
+  ['鲜味爆发','造成伤害时有概率追加 1 点伤害','味觉与火力兼顾。'],
+  ['野外嗅觉','探索时提高发现素材的机会','适合野外采集料理。'],
+  ['秘制耐力','本次冒险额外获得少量 AP 效果','适合长途探索。'],
+  ['魔力回甘','魔力感知判定 +2','适合魔法属性魔物料理。'],
+  ['幸运脆皮','战斗胜利后的掉落数量小幅提高','厨师的好运气。'],
+  ['辛香追击','连续攻击成功后下一次攻击获得加成','越打越顺手。'],
+  ['冰镇镇静','受到高额伤害时降低一次伤害','清凉料理带来的稳定感。'],
+  ['焦糖勇气','HP 较低时攻击判定获得加成','绝境中的甜味。'],
+  ['浓汤恢复','战斗结束后恢复少量体力','暖胃也暖身。']
+];
+function townOpen(type){
+  const box=document.getElementById('townContent'); if(!box)return;
+  const data={
+    shop:'<h3>🛒 商店</h3><p>这里以后可以购买冒险补给、料理素材和特殊道具。</p><button class="secondary" onclick="alert('商店商品系统将在后续版本接入。')">查看商品</button>',
+    npc:'<h3>🧑‍🍳 镇上 NPC</h3><p>可以和 NPC 聊天，了解魔物料理世界的消息。</p><div class="stat">🍳 镇长：欢迎来到美食镇！</div><div class="stat">🧑‍🍳 厨师：听说最近雨林里出现了稀有素材。</div>',
+    guild:'<h3>🛡️ 冒险者公会</h3><p>每个地区都设有冒险者公会。当前美食镇公会暂时没有正式任务，但可以办理冒险者相关事务。</p><div class="stat">🏅 冒险者公会徽章：美食镇入会纪念</div>',
+    inn:'<h3>🛏️ 客栈</h3><p>在客栈休息可以恢复行动点。</p><button class="primary" onclick="rest()">休息并恢复到最大 AP</button><p id="townRestMsg" class="muted"></p>'
+  };
+  box.innerHTML=data[type]||data.shop;
+}
+function drawFoodBuff(){
+  const b=FOOD_BUFF_POOL[Math.floor(Math.random()*FOOD_BUFF_POOL.length)];
+  document.getElementById('drawBuffResult').innerHTML=`<b>🎉 抽到了：${escapeHtml(b[0])}</b><br>${escapeHtml(b[1])}<br><span class="small muted">${escapeHtml(b[2])}</span>`;
+}
+function buffKey(){return currentUser?'mystery_recipe_buffs_'+currentUser.id:'mystery_recipe_buffs_guest';}
+function getCustomBuffs(){try{return JSON.parse(localStorage.getItem(buffKey())||'[]')}catch(e){return []}}
+function saveCustomBuff(){
+  const dish=document.getElementById('customBuffDish').value.trim(), name=document.getElementById('customBuffName').value.trim(), desc=document.getElementById('customBuffDesc').value.trim();
+  const msg=document.getElementById('customBuffMsg');
+  if(!dish||!name||!desc){msg.textContent='请把料理名称、Buff 名称和效果填写完整。';msg.className='err';return;}
+  const list=getCustomBuffs(); list.unshift({dish,name,desc,created_at:new Date().toISOString()}); localStorage.setItem(buffKey(),JSON.stringify(list));
+  document.getElementById('customBuffDish').value='';document.getElementById('customBuffName').value='';document.getElementById('customBuffDesc').value='';
+  msg.textContent='保存成功！';msg.className='ok';renderCustomBuffs();
+}
+function renderCustomBuffs(){
+  const box=document.getElementById('myBuffList');if(!box)return; const list=getCustomBuffs();
+  box.innerHTML=list.length?list.map((b,i)=>`<div class="inventoryItem"><b>🍳 ${escapeHtml(b.dish)}</b><br><strong>${escapeHtml(b.name)}</strong><br><span class="muted">${escapeHtml(b.desc)}</span><br><button class="danger" style="margin-top:8px" onclick="deleteCustomBuff(${i})">删除</button></div>`).join(''):'<p class="muted">暂无自定义 Buff。</p>';
+}
+function deleteCustomBuff(i){const list=getCustomBuffs();list.splice(i,1);localStorage.setItem(buffKey(),JSON.stringify(list));renderCustomBuffs();}
+
 function escapeHtml(v){
   return String(v??"").replace(/[&<>"']/g,c=>({
     "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
@@ -1760,10 +1845,10 @@ db.auth.onAuthStateChange((event, session)=>{
   }
 })();
 
-// 管理员权限检查：与 refreshAdminStatus 保持一致，不依赖 admins.role 字段。
-async function checkAdmin() {
+// 管理员权限检查（admins 表存在 user_id 即视为管理员）
+async function checkAdmin(){
   const ok=await refreshAdminStatus();
-  if(!ok) alert("没有管理员权限");
+  if(!ok)alert("没有管理员权限");
   return ok;
 }
 </script>
