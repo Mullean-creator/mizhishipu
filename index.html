@@ -39,7 +39,7 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
 .badge.locked{background:#888}
 .modalBack{display:none;position:fixed;inset:0;background:#0007;z-index:50;align-items:center;justify-content:center;padding:15px}
 .modalBack.show{display:flex}
-.modal{width:min(680px,100%);max-height:92vh;overflow:auto;background:#fff;border-radius:20px;padding:22px}
+.modal{width:min(680px,100%);max-height:92vh;overflow-y:auto;overflow-x:hidden;background:#fff;border-radius:20px;padding:22px;-webkit-overflow-scrolling:touch}.actionModal{max-height:88vh}.actionScroll{max-height:58vh;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-right:3px}.battleLog{height:220px;overflow-y:auto;-webkit-overflow-scrolling:touch}
 .attrGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .small{font-size:13px}
 .huntResult{padding:14px;border-radius:14px;background:#f8f6f0;margin-top:12px;white-space:pre-line}
@@ -354,9 +354,10 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
   </div>
 </div>
 
-<!-- 回合制战斗弹窗 -->
+<!-- 回合制战斗弹窗：独立窗口，可上下滑动 -->
 <div id="battleModalBack" class="modalBack">
-  <div class="modal">
+  <div class="modal actionModal">
+    <button class="modalClose" onclick="closeBattleModal()">✕</button>
     <h2>⚔️ 回合制狩猎战</h2>
     <div class="battleHud">
       <div class="fighter">
@@ -373,13 +374,63 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
     <div id="battleRound" class="statline"><b>第 1 回合</b><span>轮到你行动</span></div>
     <div id="battleLog" class="battleLog"></div>
     <div id="battleActions" class="battleActions">
-      <button class="primary" onclick="battleAction('attack')">🗡️ 普通攻击</button>
-      <button class="primary" onclick="battleAction('skill')">✨ 技巧攻击</button>
+      <button class="primary" onclick="battleAction('attack')">🗡️ 技巧攻击</button>
       <button class="secondary" onclick="battleAction('defend')">🛡️ 防御</button>
-      <button class="secondary" onclick="battleAction('sense')">👁️ 观察</button>
+      <button class="secondary" onclick="battleAction('sense')">✨ 感知弱点</button>
     </div>
     <div id="battleResult" class="huntResult" style="display:none"></div>
-    <button id="battleCloseBtn" class="secondary" style="display:none;width:100%;margin-top:10px" onclick="closeBattleModal()">返回地图</button>
+  </div>
+</div>
+
+<!-- 闪避窗口：魔物攻击时单独出现 -->
+<div id="dodgeModalBack" class="modalBack">
+  <div class="modal actionModal">
+    <button class="modalClose" onclick="resolveDodge(false)">✕</button>
+    <h2>💨 闪避判定</h2>
+    <div id="dodgeScroll" class="actionScroll">
+      <div class="card" style="box-shadow:none;background:#f8f6f0">
+        <h3 id="dodgeTitle">👾 魔物发动攻击！</h3>
+        <p id="dodgeDesc" class="muted"></p>
+        <div id="dodgeRollInfo" class="huntResult">等待你的闪避判定……</div>
+      </div>
+      <div id="dodgeLog" class="battleLog" style="height:150px;margin-top:10px"></div>
+    </div>
+    <button id="dodgeBtn" class="primary" style="width:100%;margin-top:12px" onclick="resolveDodge(true)">🎲 进行闪避</button>
+  </div>
+</div>
+
+<!-- 感知弱点窗口：单独判定魔力感知 -->
+<div id="senseModalBack" class="modalBack">
+  <div class="modal actionModal">
+    <button class="modalClose" onclick="closeSenseModal()">✕</button>
+    <h2>✨ 感知弱点</h2>
+    <div id="senseScroll" class="actionScroll">
+      <div class="card" style="box-shadow:none;background:#f8f6f0">
+        <h3>🔮 魔力感知检定</h3>
+        <p id="senseDesc" class="muted">集中感知魔物体内的魔力流动，寻找弱点。</p>
+        <div id="senseResult" class="huntResult">等待判定……</div>
+      </div>
+      <div id="senseHistory" class="battleLog" style="height:150px;margin-top:10px"></div>
+    </div>
+    <button id="senseBtn" class="primary" style="width:100%;margin-top:12px" onclick="resolveSense()">🎲 开始感知</button>
+  </div>
+</div>
+
+<!-- 掉落窗口：战斗胜利后必须手动投骰 -->
+<div id="lootModalBack" class="modalBack">
+  <div class="modal actionModal">
+    <button id="lootCloseBtn" class="modalClose" style="display:none" onclick="closeLootModal()">✕</button>
+    <h2>🎁 战利品掉落判定</h2>
+    <div id="lootScroll" class="actionScroll">
+      <div class="card" style="box-shadow:none;background:#f8f6f0">
+        <h3 id="lootTitle">🏆 魔物已击败！</h3>
+        <p id="lootDesc" class="muted">请进行一次掉落判定。熟练度越高，获得稀有素材的机会越高。</p>
+        <div id="lootRollResult" class="huntResult">🎲 尚未投掷掉落骰。</div>
+      </div>
+      <div id="lootLog" class="battleLog" style="height:180px;margin-top:10px"></div>
+    </div>
+    <button id="lootRollBtn" class="primary" style="width:100%;margin-top:12px" onclick="rollLoot()">🎲 投掷 D20 · 进行掉落判定</button>
+    <button id="lootReturnBtn" class="secondary" style="display:none;width:100%;margin-top:10px" onclick="closeLootModal()">返回地图</button>
   </div>
 </div>
 
@@ -1127,7 +1178,7 @@ async function startBattle(){
     round:1,player:p,monster:m,
     playerHp:p.maxHp,monsterHp:m.maxHp,
     defending:false,weaknessKnown:false,ended:false,log:[],
-    teamSize:partySize,coopBonus:coop
+    teamSize:partySize,coopBonus:coop,awaitingDodge:false,awaitingSense:false,pendingDodge:null,lootFinished:false
   };
 
   document.getElementById("battleModalBack").classList.add("show");
@@ -1186,7 +1237,7 @@ function updateBattleUI(){
 function rollDamage(base){ return Math.max(1,Math.round(base+d6()-3)); }
 
 async function battleAction(action){
-  if(!battle||battle.ended)return;
+  if(!battle||battle.ended||battle.awaitingDodge||battle.awaitingSense)return;
   const p=battle.player,m=battle.monster;
   const coop=battle.coopBonus||0;
 
@@ -1199,37 +1250,15 @@ async function battleAction(action){
       if(battle.weaknessKnown)dmg+=Math.max(1,Math.floor(p.taste/2));
       battle.monsterHp-=dmg;
       addBattleLog(`🗡️ 命中！造成 ${dmg} 点伤害${r.crit?"（大成功加成）":""}。`);
-    }else{
-      addBattleLog("🛡️ 未命中魔物。");
-    }
-
-  }else if(action==='skill'){
-    const r=rollCheck("魔力感知·魔法攻击",p.magic,11+m.defense,coop);
-    if(r.fumble){
-      addBattleLog("✨ 魔力失控！本回合没有造成伤害。");
-    }else if(r.success){
-      let dmg=rollDamage(p.magicAttack+2+(r.crit?5:0));
-      if(battle.weaknessKnown)dmg+=p.taste;
-      battle.monsterHp-=dmg;
-      addBattleLog(`✨ 魔力命中，造成 ${dmg} 点伤害。`);
-    }else{
-      addBattleLog("✨ 魔法没有突破魔物的防御。");
-    }
-
+    }else addBattleLog("🛡️ 未命中魔物。");
   }else if(action==='defend'){
     battle.defending=true;
     const r=rollCheck("耐力防御",p.endurance,10,coop);
     battle.guardPower=r.success?0.65:0.45;
     addBattleLog(`🛡️ ${r.success?"防御成功":"防御姿态不稳"}：下次受击减伤 ${Math.round(battle.guardPower*100)}%。`);
-
   }else if(action==='sense'){
-    const r=rollCheck("味觉·魔物弱点分析",p.taste,10+m.level,coop);
-    if(r.success){
-      battle.weaknessKnown=true;
-      addBattleLog("👅 成功解析弱点！后续攻击获得额外伤害。");
-    }else{
-      addBattleLog("👅 没能解析出明确弱点。");
-    }
+    openSenseModal();
+    return;
   }
 
   updateBattleUI();
@@ -1237,64 +1266,157 @@ async function battleAction(action){
   await monsterTurn();
 }
 
+function openSenseModal(){
+  if(!battle||battle.ended)return;
+  battle.awaitingSense=true;
+  document.getElementById("senseModalBack").classList.add("show");
+  document.getElementById("senseResult").textContent="🎲 尚未进行判定。";
+  document.getElementById("senseHistory").innerHTML=(battle.log||[]).map(x=>"<div>"+escapeHtml(x)+"</div>").join("");
+  document.getElementById("senseBtn").disabled=false;
+}
+
+async function resolveSense(){
+  if(!battle||battle.ended||!battle.awaitingSense)return;
+  const p=battle.player,m=battle.monster,coop=battle.coopBonus||0;
+  const r=rollCheck("魔力感知·弱点分析",p.magic,10+m.level,coop);
+  const result=document.getElementById("senseResult");
+  document.getElementById("senseBtn").disabled=true;
+  if(r.success){
+    battle.weaknessKnown=true;
+    result.textContent=`🔍 感知成功！D20(${r.raw}) + 魔力感知修正(${r.mod})${coop?` + 协作 ${coop}`:""} = ${r.total}。
+发现 ${monsterName(selectedMonster)} 的弱点！后续攻击获得额外伤害。`;
+    addBattleLog("✨ 感知弱点成功！已发现魔物弱点。",true);
+  }else{
+    result.textContent=`❌ 感知失败。D20(${r.raw}) + 魔力感知修正(${r.mod})${coop?` + 协作 ${coop}`:""} = ${r.total}，未达到目标 ${10+m.level}。`;
+    addBattleLog("✨ 感知弱点失败，本次没有发现弱点。");
+  }
+  document.getElementById("senseHistory").innerHTML=(battle.log||[]).map(x=>"<div>"+escapeHtml(x)+"</div>").join("");
+  battle.awaitingSense=false;
+  setTimeout(async()=>{
+    closeSenseModal();
+    if(!battle||battle.ended)return;
+    updateBattleUI();
+    await monsterTurn();
+  },900);
+}
+
+function closeSenseModal(){document.getElementById("senseModalBack").classList.remove("show")}
+
 async function monsterTurn(){
   if(!battle||battle.ended)return;
   const p=battle.player,m=battle.monster;
   const initiative=rollCheck("嗅觉·战斗直觉",p.smell,8+m.speed,battle.coopBonus||0);
-
   if(initiative.success){
     addBattleLog("👃 你提前察觉魔物动作，本回合闪避成功！");
-  }else{
-    const raw=d20();
-    const total=raw+Math.floor(m.speed/2);
-    const target=8+p.defense;
-    addBattleLog(`🎲 魔物攻击：d20(${raw}) + 速度修正 = ${total}，目标 ${target}`);
-    if(raw===1 || total<target){
-      addBattleLog("💨 魔物攻击落空！");
-    }else{
-      let dmg=rollDamage(m.attack);
-      const guard=battle.guardPower||0;
-      if(guard)dmg=Math.max(1,Math.floor(dmg*(1-guard)));
-      if(raw===20)dmg=Math.round(dmg*1.5);
-      battle.playerHp-=dmg;
-      addBattleLog(`👾 魔物命中，造成 ${dmg} 点伤害${raw===20?"（魔物大成功）":""}。`);
-    }
+    battle.round++;
+    updateBattleUI();
+    return;
   }
 
+  battle.awaitingDodge=true;
+  const raw=d20();
+  const target=8+p.defense;
+  battle.pendingDodge={raw,target,monsterAttack:m.attack,monsterSpeed:m.speed};
+  document.getElementById("dodgeModalBack").classList.add("show");
+  document.getElementById("dodgeBtn").disabled=false;
+  document.getElementById("dodgeRollInfo").textContent=`👾 ${monsterName(selectedMonster)} 正在发动攻击！\n\n你需要进行一次闪避判定。\n目标值：${target}`;
+  document.getElementById("dodgeDesc").textContent=`魔物攻击：攻击力 ${m.attack}　速度 ${m.speed}　你的防御目标：${target}`;
+  document.getElementById("dodgeLog").innerHTML=(battle.log||[]).map(x=>"<div>"+escapeHtml(x)+"</div>").join("");
+}
+
+async function resolveDodge(playerDodges){
+  if(!battle||battle.ended||!battle.awaitingDodge)return;
+  const p=battle.player,m=battle.monster,pending=battle.pendingDodge;
+  document.getElementById("dodgeBtn").disabled=true;
+  const raw=pending.raw;
+  const mod=statMod(p.smell);
+  const total=raw+mod+(battle.coopBonus||0);
+  const target=pending.target;
+  const success=playerDodges && (raw===20 || (raw!==1 && total>=target));
+  addBattleLog(`💨 闪避判定：D20(${raw}) + 嗅觉修正(${mod})${battle.coopBonus?` + 协作(${battle.coopBonus})`:``} = ${total}，目标 ${target}`);
+  const result=document.getElementById("dodgeRollInfo");
+  if(success){
+    result.textContent=`💨 闪避成功！\nD20(${raw}) + 嗅觉修正(${mod})${battle.coopBonus?` + 协作 ${battle.coopBonus}`:""} = ${total}。\n你成功避开了魔物攻击！`;
+    addBattleLog("💨 你成功闪避魔物攻击！",true);
+  }else{
+    let dmg=rollDamage(m.attack);
+    const guard=battle.guardPower||0;
+    if(guard)dmg=Math.max(1,Math.floor(dmg*(1-guard)));
+    if(raw===20)dmg=Math.round(dmg*1.5);
+    battle.playerHp-=dmg;
+    result.textContent=`💥 闪避失败！\nD20(${raw}) + 嗅觉修正(${mod})${battle.coopBonus?` + 协作 ${battle.coopBonus}`:""} = ${total}，目标 ${target}。\n受到 ${dmg} 点伤害。`;
+    addBattleLog(`👾 魔物命中，造成 ${dmg} 点伤害${guard?`（防御减伤）`:``}。`);
+  }
   battle.guardPower=0;
-  if(battle.playerHp<=0){await finishBattle(false);return;}
-  battle.round++;
-  updateBattleUI();
+  battle.awaitingDodge=false;
+  battle.pendingDodge=null;
+  document.getElementById("dodgeLog").innerHTML=(battle.log||[]).map(x=>"<div>"+escapeHtml(x)+"</div>").join("");
+  setTimeout(async()=>{
+    document.getElementById("dodgeModalBack").classList.remove("show");
+    if(!battle||battle.ended)return;
+    if(battle.playerHp<=0){await finishBattle(false);return;}
+    battle.round++;
+    updateBattleUI();
+  },900);
 }
 
 async function finishBattle(win){
   if(!battle||battle.ended)return;
   battle.ended=true;
   document.getElementById("battleActions").style.display="none";
-  document.getElementById("battleCloseBtn").style.display="block";
 
   if(!win){
     addBattleLog("💀 你被击倒了。此次狩猎失败。",true);
     document.getElementById("battleResult").style.display="block";
-    document.getElementById("battleResult").textContent=
-      "狩猎失败\n消耗：1 AP\n剩余 AP："+(currentAdventurer?.action_points??0);
+    document.getElementById("battleResult").textContent="狩猎失败\n消耗：1 AP\n剩余 AP："+(currentAdventurer?.action_points??0);
     await recordHunt(false,0);
     updateBattleUI();
+    setTimeout(()=>closeBattleModal(),700);
     return;
   }
 
-  // 解锁图鉴
   await unlockMonsterInBestiary(selectedMonster.id);
+  const rewardCoins=10+buildMonsterStats(selectedMonster,selectedMap).level*5;
+  const newCoins=Number(currentAdventurer?.coins||0)+rewardCoins;
+  const newScore=Number(currentAdventurer?.score||0)+10;
+  const {data}=await db.from("adventurers").update({coins:newCoins,score:newScore}).eq("user_id",currentUser.id).select().single();
+  if(data)currentAdventurer=data;
+  await recordHunt(true,10);
+  addBattleLog("🏆 魔物被击败！图鉴已记录。",true);
+  document.getElementById("battleResult").style.display="block";
+  document.getElementById("battleResult").textContent="🏆 狩猎成功！\n+10 分　💰 +"+rewardCoins+" 金币\n📖 已解锁图鉴："+monsterName(selectedMonster)+"\n\n🎁 接下来请进行掉落判定。";
+  updateBattleUI();
+  setTimeout(()=>openLootModal(),500);
+}
 
+function openLootModal(){
+  if(!selectedMonster)return;
+  document.getElementById("lootModalBack").classList.add("show");
+  document.getElementById("lootCloseBtn").style.display="none";
+  document.getElementById("lootReturnBtn").style.display="none";
+  document.getElementById("lootRollBtn").style.display="block";
+  document.getElementById("lootRollBtn").disabled=false;
+  document.getElementById("lootTitle").textContent="🏆 "+monsterName(selectedMonster)+" 已击败！";
+  document.getElementById("lootDesc").textContent="熟练度用于掉落判定。请按下按钮投掷 D20，投出的数字会与熟练度修正及队伍协作共同决定掉落。";
+  document.getElementById("lootRollResult").textContent="🎲 尚未投掷掉落骰。";
+  document.getElementById("lootLog").innerHTML="";
+}
+
+async function rollLoot(){
+  if(!battle||!battle.ended||battle.lootFinished)return;
+  const btn=document.getElementById("lootRollBtn");
+  btn.disabled=true;
   const drops=selectedMonster.drops||[];
   const prof=Math.max(0,Number(currentAdventurer?.proficiency||0));
+  const roll=d20();
+  const profBonus=Math.floor(prof/2);
+  const coop=Math.max(0,battle.coopBonus||0);
+  const total=roll+profBonus+coop;
+  let tier,tries;
+  if(total>=26){tier="✨ 极佳掉落";tries=3;}else if(total>=20){tier="🌟 稀有掉落";tries=2;}else if(total>=14){tier="🍖 良好掉落";tries=2;}else{tier="📦 普通掉落";tries=1;}
+  const lines=[`🎲 D20：${roll}`,`📈 熟练度修正：+${profBonus}`,`👥 队伍协作：+${coop}`,`⭐ 最终判定：${total}`,`
+${tier}`];
   let obtained=[];
-
-  const lootRoll=d20();
-  const lootTotal=lootRoll+Math.floor(prof/2)+Math.max(0,battle.coopBonus||0);
-  addBattleLog(`🎲 熟练度·掉落检定：d20(${lootRoll}) + 熟练度修正(${Math.floor(prof/2)}) = ${lootTotal}`,true);
-
-  const tries=lootTotal>=18?3:lootTotal>=12?2:1;
   for(let i=0;i<tries;i++){
     const d=weightedPick(drops);
     if(!d||!d.item_name)continue;
@@ -1302,24 +1424,25 @@ async function finishBattle(win){
     const max=Math.max(min,Number(d.max_count??min)||min);
     const quantity=Math.floor(Math.random()*(max-min+1))+min;
     const saved=await addInventoryItem(d.item_name,d.item_desc??"魔物掉落素材",quantity);
-    if(saved)obtained.push("📦 "+d.item_name+" ×"+quantity);
+    if(saved)obtained.push(`📦 ${d.item_name} ×${quantity}`);
   }
+  if(!obtained.length)obtained.push("本次没有成功写入背包的掉落物。");
+  lines.push("\n🎁 获得：",...obtained);
+  lines.push("\n⚡ 剩余 AP："+(currentAdventurer?.action_points??0));
+  document.getElementById("lootRollResult").textContent=lines.join("\n");
+  document.getElementById("lootLog").innerHTML=lines.map(x=>"<div>"+escapeHtml(x)+"</div>").join("");
+  battle.lootFinished=true;
+  document.getElementById("lootRollBtn").style.display="none";
+  document.getElementById("lootCloseBtn").style.display="block";
+  document.getElementById("lootReturnBtn").style.display="block";
+}
 
-  const rewardCoins=10+buildMonsterStats(selectedMonster,selectedMap).level*5;
-  const newCoins=Number(currentAdventurer?.coins||0)+rewardCoins;
-  const newScore=Number(currentAdventurer?.score||0)+10;
-  const {data}=await db.from("adventurers").update({coins:newCoins,score:newScore})
-    .eq("user_id",currentUser.id).select().single();
-  if(data)currentAdventurer=data;
-
-  await recordHunt(true,10);
-  addBattleLog("🏆 魔物被击败了！已成功记录到图鉴！",true);
-  document.getElementById("battleResult").style.display="block";
-  document.getElementById("battleResult").textContent=
-    "🎉 狩猎成功！\n\n🏆 +10 分　💰 +"+rewardCoins+" 金币\n📖 解锁怪物图鉴："+monsterName(selectedMonster)+"\n🎁 掉落：\n"+
-    (obtained.length?obtained.join("\n"):"本次没有获得掉落物。")+
-    "\n\n⚡ 剩余 AP："+(currentAdventurer?.action_points??0);
-  updateBattleUI();
+function closeLootModal(){
+  document.getElementById("lootModalBack").classList.remove("show");
+  if(battle)document.getElementById("battleModalBack").classList.remove("show");
+  battle=null;
+  loadPanel();
+  refreshTeam();
 }
 
 async function unlockMonsterInBestiary(monsterId){
@@ -1334,10 +1457,12 @@ async function unlockMonsterInBestiary(monsterId){
 }
 
 function closeBattleModal(){
+  if(battle?.ended && !battle?.lootFinished && selectedMonster){
+    openLootModal();
+    return;
+  }
   document.getElementById("battleModalBack").classList.remove("show");
-  battle=null;
-  loadPanel();
-  refreshTeam();
+  if(!battle||battle.lootFinished){battle=null;loadPanel();refreshTeam();}
 }
 
 function weightedPick(items){
