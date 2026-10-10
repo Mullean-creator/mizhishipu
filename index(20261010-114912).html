@@ -1,0 +1,1921 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>谜之食谱世界｜西幻美食探索</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f6f3ea;color:#29251f}
+button,input,select,textarea{font:inherit}
+button{cursor:pointer}
+.wrap{max-width:900px;margin:auto;padding:20px}
+.card{background:#fff;border-radius:18px;padding:20px;margin:14px 0;box-shadow:0 4px 18px #0001}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.muted{color:#777}.ok{color:#16753a}.err{color:#b3261e}
+input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radius:10px;background:#fff}
+.primary{background:#29251f;color:#fff;border:0;padding:11px 15px;border-radius:10px}
+.secondary{background:#eee9df;color:#29251f;border:0;padding:11px 15px;border-radius:10px}
+.danger{background:#b3261e;color:#fff;border:0;padding:11px 15px;border-radius:10px}
+.primary:disabled,.secondary:disabled,.danger:disabled{opacity:.55;cursor:not-allowed}
+.stat{display:inline-block;background:#f1eee6;border-radius:12px;padding:10px 14px;margin:4px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+#game{display:none}#userBox{display:none}.app{display:none}
+.topbar{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.menuBtn{font-size:22px;padding:8px 12px;background:#29251f;color:#fff;border:0;border-radius:10px}
+.side{position:fixed;left:0;top:0;bottom:0;width:270px;background:#fff;box-shadow:4px 0 20px #0002;z-index:20;padding:22px 16px;transform:translateX(-105%);transition:.2s;overflow-y:auto}
+.side.open{transform:translateX(0)}
+.side h2{margin-top:4px}
+.navbtn{display:block;width:100%;text-align:left;border:0;background:#f3f0e8;color:#29251f;padding:14px;border-radius:12px;margin:8px 0}
+.navbtn.active{background:#29251f;color:#fff}
+.navbtn.adminNav{background:#ffe3e3;color:#800000;font-weight:bold}
+.navbtn.adminNav.active{background:#b3261e;color:#fff}
+.overlay{display:none;position:fixed;inset:0;background:#0005;z-index:19}.overlay.show{display:block}
+.section{display:none}.section.active{display:block}
+.inventoryItem,.monsterItem,.mapItem,.bestiaryCard,.recipeItem{border:1px solid #e5e0d6;border-radius:14px;padding:14px;margin:10px 0}
+.mapItem.locked{opacity:0.6;background:#f0ece1;border:1px dashed #aaa}
+.badge{float:right;background:#29251f;color:#fff;border-radius:999px;padding:3px 9px}
+.badge.locked{background:#888}
+.modalBack{display:none;position:fixed;inset:0;background:#0007;z-index:50;align-items:center;justify-content:center;padding:15px}
+.modalBack.show{display:flex}
+.modal{width:min(680px,100%);max-height:92vh;overflow-y:auto;overflow-x:hidden;background:#fff;border-radius:20px;padding:22px;-webkit-overflow-scrolling:touch}.actionModal{max-height:88vh}.actionScroll{max-height:58vh;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-right:3px}.battleLog{height:220px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.attrGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.small{font-size:13px}
+.huntResult{padding:14px;border-radius:14px;background:#f8f6f0;margin-top:12px;white-space:pre-line}
+.battleHud{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0}.fighter{border:1px solid #e5e0d6;border-radius:16px;padding:14px;background:#f8f6f0}.fighterTitle{font-weight:700;font-size:18px;display:flex;justify-content:space-between;gap:8px}.hpbar{height:12px;background:#ddd6c9;border-radius:99px;overflow:hidden;margin:8px 0}.hpfill{height:100%;background:#29251f;transition:width .25s}.battleLog{height:180px;overflow:auto;background:#171511;color:#f8f6f0;border-radius:14px;padding:12px;font-size:14px;line-height:1.65}.battleActions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}.battleActions button{min-height:48px}.encounter{border:2px solid #e5e0d6;border-radius:16px;padding:14px;margin:10px 0;background:#fff}.encounter.selected{border-color:#29251f;background:#f8f6f0}
+.teamMembers{display:grid;gap:8px;margin-top:10px}
+.teamMember{border:1px solid #ddd6c9;border-radius:12px;padding:10px;background:#fff}
+.teamMember b{display:block;margin-bottom:3px}
+.statline{display:flex;justify-content:space-between;gap:8px;padding:5px 0}.adminTabs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}.adminTab{border:0;background:#eee9df;padding:11px 14px;border-radius:10px;font-weight:700}.adminTab.active{background:#b3261e;color:#fff}.adminPane{display:none}.adminPane.active{display:block}.adminRecipeCard{border:1px solid #e5e0d6;border-radius:14px;padding:16px;margin:12px 0;background:#fff}.adminRecipeCard.pending{border-left:5px solid #b3261e}.adminStat{font-size:13px;color:#666;margin-top:4px}.modalClose{float:right;border:0;background:#eee9df;border-radius:10px;padding:8px 11px}@media(max-width:600px){.battleHud{grid-template-columns:1fr}.battleActions{grid-template-columns:1fr 1fr}}
+@media(max-width:600px){.wrap{padding:12px}.grid,.attrGrid{grid-template-columns:1fr}.card{padding:16px}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <!-- 登录注册卡片 -->
+  <div id="auth" class="card">
+    <h1>🍲 谜之食谱世界</h1>
+    <h2>冒险者登录</h2>
+    <input id="email" type="email" placeholder="邮箱"><br><br>
+    <input id="password" type="password" placeholder="密码"><br><br>
+    <input id="username" placeholder="账号名（注册时填写）"><br><br>
+    <input id="nickname" placeholder="昵称（注册时填写）"><br><br>
+    <div class="row">
+      <button class="primary" onclick="login()">登录</button>
+      <button class="secondary" onclick="signup()">注册</button>
+    </div>
+    <p id="msg" class="muted"></p>
+  </div>
+
+  <!-- 当前登录者简览 -->
+  <div id="userBox" class="card">
+    <div class="row">
+      <strong id="who"></strong>
+      <button class="secondary" onclick="logout()">退出</button>
+    </div>
+  </div>
+
+  <!-- 游戏主界面 -->
+  <div id="game" class="app">
+    <div class="topbar">
+      <button class="menuBtn" onclick="toggleSide()">☰</button>
+      <h1 style="margin:0;font-size:24px">🍲 谜之食谱世界</h1>
+      <button class="primary" style="margin-left:auto;padding:8px 12px" onclick="showSection('hunt')">⚔️ 狩猎</button>
+    </div>
+
+    <!-- 1. 主页面 -->
+    <div id="mainSection" class="section active">
+      <div class="card">
+        <h2>🏠 冒险者大厅</h2>
+        <p id="welcomeText" class="muted">欢迎来到冒险者世界。</p>
+      </div>
+
+      <div class="card">
+        <h2>⚔️ 狩猎</h2>
+        <p class="muted">前往地图、寻找魔物并获取掉落素材。每次狩猎消耗 1 点 AP。</p>
+        <button class="primary" onclick="showSection('hunt')">🗺️ 进入地图 / 狩猎</button>
+      </div>
+
+      <div class="card">
+        <h2>📅 每日签到</h2>
+        <button class="primary" onclick="signin()">签到 +500 金币</button>
+        <p id="signinMsg" class="muted"></p>
+      </div>
+
+      <div class="card">
+        <h2>🛏️ 客栈</h2>
+        <p class="muted">在这里休息，恢复行动点。</p>
+        <button class="primary" onclick="rest()">休息并恢复到最大 AP</button>
+        <p id="restMsg" class="muted"></p>
+      </div>
+    </div>
+
+    <!-- 美食镇 -->
+    <div id="townSection" class="section">
+      <div class="card">
+        <h2>🏘️ 美食镇</h2><p class="muted">冒险者的起点：补给、休息、认识 NPC 与办理公会事务。</p>
+        <div class="grid"><button class="primary" onclick="townOpen('shop')">🛒 商店</button><button class="secondary" onclick="townOpen('npc')">🧑‍🍳 NPC</button><button class="secondary" onclick="townOpen('guild')">🛡️ 冒险者公会</button><button class="secondary" onclick="townOpen('inn')">🛏️ 客栈</button></div>
+        <div id="townContent" class="huntResult" style="margin-top:14px">选择一个设施看看。</div>
+      </div>
+    </div>
+
+    <!-- 美食 Buff -->
+    <div id="buffSection" class="section">
+      <div class="card"><h2>🍲 美食 Buff</h2><p class="muted">随机抽取料理 Buff，或为自己的魔物料理设计专属 Buff。</p><button class="primary" onclick="drawFoodBuff()">🎲 随机抽取 Buff</button><div id="drawBuffResult" class="huntResult">还没有抽取 Buff。</div></div>
+      <div class="card"><h3>✍️ 自定义魔物料理 Buff</h3><input id="customBuffDish" placeholder="料理名称，例如：炙烤史莱姆排"><br><br><input id="customBuffName" placeholder="Buff 名称，例如：黏液护盾"><br><br><textarea id="customBuffDesc" rows="3" placeholder="Buff 效果描述"></textarea><br><br><button class="primary" onclick="saveCustomBuff()">🍳 保存我的料理 Buff</button><div id="customBuffMsg" class="muted"></div></div>
+      <div class="card"><h3>📜 我的料理 Buff</h3><div id="myBuffList"><p class="muted">暂无自定义 Buff。</p></div></div>
+    </div>
+
+    <!-- 2. 我的面板 -->
+    <div id="panelSection" class="section">
+      <div class="card">
+        <h2>👤 我的面板</h2>
+        <div id="panel"></div>
+      </div>
+    </div>
+
+    <!-- 3. 背包 -->
+    <div id="inventorySection" class="section">
+      <div class="card">
+        <h2>🎒 我的背包</h2>
+        <p class="muted">这里只显示当前登录冒险者自己的物品。</p>
+        <div id="inventory"></div>
+      </div>
+    </div>
+
+    <!-- 4. 提交料理 -->
+    <div id="recipeSection" class="section">
+      <div class="card">
+        <h2>🍳 创意料理提交</h2>
+        <p class="muted">游戏外完成原创料理/食谱后，在这里提交登记。请同时把成品和食谱发布到企划指定的 QQ 群相册，管理员审核后会为你与其他玩家解锁新地图！</p>
+        <input id="recipeName" placeholder="料理名称"><br><br>
+        <textarea id="recipeDesc" placeholder="简单描述 / 使用了哪些魔物食材" rows="3"></textarea><br><br>
+        <label><b>🗺️ 希望解锁的地图</b></label>
+        <select id="recipeMapRequest">
+          <option value="">正在读取可申请地图……</option>
+        </select><br><br>
+        <button class="primary" onclick="submitRecipe()">📨 提交料理并申请解锁地图</button>
+        <p id="recipeMsg" class="muted"></p>
+      </div>
+      <div class="card">
+        <h3>📜 我的提交记录</h3>
+        <div id="recipeList"><p class="muted">暂无记录。</p></div>
+      </div>
+    </div>
+
+    <!-- 5. 怪物图鉴（战胜后解锁） -->
+    <div id="bestiarySection" class="section">
+      <div class="card">
+        <h2>📖 魔物图鉴</h2>
+        <p class="muted">只有在战斗中击败过的魔物才会在这里解锁详细档案与掉落列表。</p>
+        <div id="bestiaryList"></div>
+      </div>
+    </div>
+
+    <!-- 6. 地图 / 狩猎 -->
+    <div id="huntSection" class="section">
+      <div class="card">
+        <h2>👥 临时狩猎队</h2>
+        <p class="muted">组队后打怪会显示你角色面板中的【名字】。队伍是临时的，不绑定长期关系。</p>
+        <div class="row">
+          <button class="primary" onclick="createHuntTeam()">➕ 创建临时队伍</button>
+          <input id="teamCodeInput" placeholder="输入队伍邀请码" style="max-width:220px">
+          <button class="secondary" onclick="joinHuntTeam()">加入队伍</button>
+          <button class="secondary" onclick="leaveHuntTeam()">离开队伍</button>
+        </div>
+        <p id="teamMsg" class="small muted"></p>
+        <div id="teamMembers" class="teamMembers"></div>
+      </div>
+
+      <div class="card">
+        <h2>🗺️ 冒险地图</h2>
+        <p id="huntStatus" class="muted">正在读取地图……</p>
+        <p class="small muted">提示：初始开放【美食镇】和【雨林】，其他地图需要玩家提交料理并由 GM 审核解锁！</p>
+        <div id="maps"></div>
+      </div>
+    </div>
+
+    <!-- 7. GM 管理员专属后台 -->
+    <div id="adminSection" class="section">
+      <div class="card" style="border:2px solid #b3261e;">
+        <h2>👑 GM 管理员控制台</h2>
+        <p class="muted">独立的 GM 工作区：审核料理、给指定玩家解锁地图、修改玩家数据，以及管理自己的 GM 角色数据。</p>
+        <div class="adminTabs">
+          <button id="adminTabRecipes" class="adminTab active" onclick="showAdminPane('recipes')">🍳 料理审核</button>
+          <button id="adminTabPlayers" class="adminTab" onclick="showAdminPane('players')">👥 玩家管理</button>
+          <button id="adminTabSelf" class="adminTab" onclick="showAdminPane('self')">👑 我的 GM 数据</button>
+          <button id="adminTabMaps" class="adminTab" onclick="showAdminPane('maps')">🗺️ 地图管理</button>
+        </div>
+      </div>
+
+      <div id="adminPaneRecipes" class="adminPane active">
+        <div class="card">
+          <h3>🍳 玩家料理审核</h3>
+          <p class="muted">这里显示其他玩家提交的料理。审核通过时，会按照玩家提交时指定的地图，只给该玩家解锁对应地图。</p>
+          <div class="row">
+            <button class="secondary" onclick="loadAdminRecipes()">🔄 刷新提交</button>
+          </div>
+          <div id="adminRecipeList"></div>
+        </div>
+      </div>
+
+      <div id="adminPanePlayers" class="adminPane">
+        <div class="card">
+          <h3>👥 玩家数据管理</h3>
+          <label>选择玩家角色：</label>
+          <select id="adminPlayerSelect" onchange="onAdminSelectPlayer()"></select>
+          <br><br>
+          <div class="grid">
+            <div><label>角色名字：</label><input id="adm_name" type="text"></div>
+            <div><label>年龄：</label><input id="adm_age" type="number" min="1"></div>
+            <div><label>性别：</label><input id="adm_gender" type="text"></div>
+            <div><label>身高：</label><input id="adm_height" type="text"></div>
+            <div><label>种族：</label><input id="adm_race" type="text"></div>
+            <div><label>职业：</label><input id="adm_job" type="text"></div>
+            <div><label>技巧：</label><input id="adm_technique" type="number"></div>
+            <div><label>耐力：</label><input id="adm_endurance" type="number"></div>
+            <div><label>味觉：</label><input id="adm_taste" type="number"></div>
+            <div><label>熟练度：</label><input id="adm_proficiency" type="number"></div>
+            <div><label>嗅觉：</label><input id="adm_smell" type="number"></div>
+            <div><label>魔力感知：</label><input id="adm_magic_sense" type="number"></div>
+            <div><label>当前 AP：</label><input id="adm_ap" type="number"></div>
+            <div><label>最大 AP：</label><input id="adm_max_ap" type="number"></div>
+            <div><label>金币：</label><input id="adm_coins" type="number"></div>
+            <div><label>等级：</label><input id="adm_level" type="number"></div>
+          </div>
+          <br>
+          <div class="row">
+            <button class="primary" onclick="saveAdminPlayerData()">💾 保存玩家全部数据</button>
+            <button class="secondary" onclick="grantInfiniteAP()">⚡ 9999 AP</button>
+          </div>
+          <p id="adminPlayerMsg" class="muted"></p>
+        </div>
+      </div>
+
+      <div id="adminPaneSelf" class="adminPane">
+        <div class="card">
+          <h3>👑 我的 GM 角色数据</h3>
+          <p class="muted">这是当前登录 GM 自己的角色资料，不需要在玩家列表里寻找自己。</p>
+          <div class="grid">
+            <div><label>角色名字：</label><input id="self_name" type="text"></div>
+            <div><label>年龄：</label><input id="self_age" type="number" min="1"></div>
+            <div><label>性别：</label><input id="self_gender" type="text"></div>
+            <div><label>身高：</label><input id="self_height" type="text"></div>
+            <div><label>种族：</label><input id="self_race" type="text"></div>
+            <div><label>职业：</label><input id="self_job" type="text"></div>
+            <div><label>技巧：</label><input id="self_technique" type="number"></div>
+            <div><label>耐力：</label><input id="self_endurance" type="number"></div>
+            <div><label>味觉：</label><input id="self_taste" type="number"></div>
+            <div><label>熟练度：</label><input id="self_proficiency" type="number"></div>
+            <div><label>嗅觉：</label><input id="self_smell" type="number"></div>
+            <div><label>魔力感知：</label><input id="self_magic_sense" type="number"></div>
+            <div><label>当前 AP：</label><input id="self_ap" type="number"></div>
+            <div><label>最大 AP：</label><input id="self_max_ap" type="number"></div>
+            <div><label>金币：</label><input id="self_coins" type="number"></div>
+            <div><label>等级：</label><input id="self_level" type="number"></div>
+          </div>
+          <br>
+          <div class="row">
+            <button class="primary" onclick="saveAdminSelfData()">💾 保存我的 GM 数据</button>
+            <button class="secondary" onclick="setSelfInfiniteAP()">⚡ 我的 AP 设为 9999</button>
+            <button class="secondary" onclick="loadAdminSelfData()">🔄 重新读取</button>
+          </div>
+          <p id="adminSelfMsg" class="muted"></p>
+        </div>
+      </div>
+
+      <div id="adminPaneMaps" class="adminPane">
+        <div class="card">
+          <h3>🗺️ 玩家地图权限</h3>
+          <p class="muted">地图解锁现在按玩家独立保存。管理员可以查看某个玩家已经解锁的地图，并手动补发地图权限。</p>
+          <label>选择玩家：</label>
+          <select id="adminMapPlayerSelect" onchange="loadAdminPlayerMaps()"></select>
+          <div id="adminPlayerMaps" style="margin-top:12px"></div>
+        </div>
+      </div>
+    </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- 侧边栏导航 -->
+<div id="overlay" class="overlay" onclick="closeSide()"></div>
+<aside id="side" class="side">
+  <h2>🧭 冒险者菜单</h2>
+  <p id="sideName" class="muted"></p>
+  <button id="navMain" class="navbtn active" onclick="showSection('main')">🏠 主页面</button>
+  <button id="navPanel" class="navbtn" onclick="showSection('panel')">👤 我的面板</button>
+  <button id="navInventory" class="navbtn" onclick="showSection('inventory')">🎒 我的背包</button>
+  <button id="navBestiary" class="navbtn" onclick="showSection('bestiary')">📖 怪物图鉴</button>
+  <button id="navHunt" class="navbtn" onclick="showSection('hunt')">⚔️ 地图 / 狩猎</button>
+  <button id="navTown" class="navbtn" onclick="showSection('town')">🏘️ 美食镇</button>
+  <button id="navBuff" class="navbtn" onclick="showSection('buff')">🍲 美食 Buff</button>
+  <button id="navRecipe" class="navbtn" onclick="showSection('recipe')">🍳 提交料理</button>
+
+  <!-- GM管理员后台入口，仅授权账号可见 -->
+  <button id="navAdmin" class="navbtn adminNav" style="display:none;" onclick="showSection('admin')">👑 GM后台设置</button>
+
+  <hr>
+  <button class="navbtn" onclick="closeSide()">✕ 关闭菜单</button>
+</aside>
+
+<!-- 首次创建角色弹窗 -->
+<div id="setupBack" class="modalBack">
+  <div class="modal">
+    <h2>🧙 创建你的冒险者</h2>
+    <p class="muted">第一次进入游戏需要填写角色资料。六项基础属性总和必须在 <b>36～50</b> 之间。</p>
+
+    <div class="grid">
+      <input id="a_name" placeholder="姓名">
+      <input id="a_age" type="number" min="1" placeholder="年龄">
+      <input id="a_gender" placeholder="性别">
+      <input id="a_height" placeholder="身高，例如 175cm">
+      <input id="a_race" placeholder="种族，例如 人类">
+      <input id="a_job" placeholder="职业，例如 勇者">
+    </div>
+
+    <h3>⚔️ 六项基础属性</h3>
+    <div class="attrGrid">
+      <input id="a_technique" type="number" min="0" value="0" placeholder="技巧">
+      <input id="a_endurance" type="number" min="0" value="0" placeholder="耐力">
+      <input id="a_taste" type="number" min="0" value="0" placeholder="味觉">
+      <input id="a_proficiency" type="number" min="0" value="0" placeholder="熟练度">
+      <input id="a_smell" type="number" min="0" value="0" placeholder="嗅觉">
+      <input id="a_magic" type="number" min="0" value="0" placeholder="魔力感知">
+    </div>
+
+    <p id="sumText" class="muted">当前属性总和：0 / 50</p>
+    <div class="row">
+      <button class="primary" onclick="createAdventurer()">创建冒险者</button>
+    </div>
+    <p id="setupMsg" class="muted"></p>
+  </div>
+</div>
+
+<!-- 狩猎遭遇弹窗 -->
+<div id="huntModalBack" class="modalBack">
+  <div class="modal">
+    <button class="modalClose" onclick="closeHuntModal()">✕</button>
+    <h2 id="huntModalTitle">🗺️ 狩猎</h2>
+    <p id="huntModalDesc" class="muted"></p>
+    <div id="encounters"></div>
+    <p id="huntModalMsg" class="muted"></p>
+    <div class="card" style="box-shadow:none;background:#f8f6f0;margin-top:10px">
+      <b id="encounterModeTitle">🎲 单人遭遇</b>
+      <p id="encounterModeDesc" class="small muted">本次为单人狩猎。</p>
+      <div id="encounterTeamSummary"></div>
+    </div>
+    <button id="encounterStartBtn" class="primary" onclick="startBattle()" disabled style="margin-top:10px">⚔️ 开始战斗（消耗 1 AP）</button>
+  </div>
+</div>
+
+<!-- 回合制战斗弹窗：独立窗口，可上下滑动 -->
+<div id="battleModalBack" class="modalBack">
+  <div class="modal actionModal">
+    <button class="modalClose" onclick="closeBattleModal()">✕</button>
+    <h2>⚔️ 回合制狩猎战</h2>
+    <div class="battleHud">
+      <div class="fighter">
+        <div class="fighterTitle"><span>🧑 <span id="battlePlayerName">冒险者</span></span><span id="playerHpText">0 / 0</span></div>
+        <div class="hpbar"><div id="playerHpFill" class="hpfill"></div></div>
+        <div id="playerBattleStats" class="small muted"></div>
+      </div>
+      <div class="fighter">
+        <div class="fighterTitle"><span id="battleMonsterName">👾 魔物</span><span id="monsterHpText">0 / 0</span></div>
+        <div class="hpbar"><div id="monsterHpFill" class="hpfill"></div></div>
+        <div id="monsterBattleStats" class="small muted"></div>
+      </div>
+    </div>
+    <div id="battleRound" class="statline"><b>第 1 回合</b><span>轮到你行动</span></div>
+    <div id="battleLog" class="battleLog"></div>
+    <div id="battleActions" class="battleActions">
+      <button class="primary" onclick="battleAction('attack')">🗡️ 攻击</button>
+      <button class="secondary" onclick="battleAction('defend')">🛡️ 防御</button>
+      <button class="secondary" onclick="battleAction('potion')">🧪 吃血药</button>
+      <button class="secondary" onclick="battleAction('sense')">✨ 感知弱点</button>
+      <button class="secondary" onclick="battleAction('run')">🏃 逃跑</button>
+    </div>
+    <div id="battleResult" class="huntResult" style="display:none"></div>
+  </div>
+</div>
+
+<!-- 魔物回合：玩家选择如何应对已经发动的攻击 -->
+<div id="dodgeModalBack" class="modalBack">
+  <div class="modal actionModal">
+    <h2>👾 魔物回合</h2>
+    <div id="dodgeScroll" class="actionScroll">
+      <div class="card" style="box-shadow:none;background:#f8f6f0">
+        <h3 id="dodgeTitle">👾 魔物发动攻击！</h3>
+        <p id="dodgeDesc" class="muted"></p>
+        <div id="dodgeRollInfo" class="huntResult">等待你的应对……</div>
+      </div>
+      <div id="dodgeLog" class="battleLog" style="height:150px;margin-top:10px"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px">
+      <button class="primary" onclick="resolveMonsterResponse('dodge')">💨 闪避</button>
+      <button class="secondary" onclick="resolveMonsterResponse('defend')">🛡️ 防御</button>
+      <button class="secondary" onclick="resolveMonsterResponse('potion')">🧪 吃血药</button>
+      <button class="secondary" onclick="resolveMonsterResponse('run')">🏃 逃跑</button>
+    </div>
+    <button id="dodgeBtn" style="display:none" onclick="resolveDodge(true)">兼容按钮</button>
+  </div>
+</div>
+
+<!-- 感知弱点窗口：单独判定魔力感知 -->
+<div id="senseModalBack" class="modalBack">
+  <div class="modal actionModal">
+    <button class="modalClose" onclick="closeSenseModal()">✕</button>
+    <h2>✨ 感知弱点</h2>
+    <div id="senseScroll" class="actionScroll">
+      <div class="card" style="box-shadow:none;background:#f8f6f0">
+        <h3>🔮 魔力感知检定</h3>
+        <p id="senseDesc" class="muted">集中感知魔物体内的魔力流动，寻找弱点。</p>
+        <div id="senseResult" class="huntResult">等待判定……</div>
+      </div>
+      <div id="senseHistory" class="battleLog" style="height:150px;margin-top:10px"></div>
+    </div>
+    <button id="senseBtn" class="primary" style="width:100%;margin-top:12px" onclick="resolveSense()">🎲 开始感知</button>
+  </div>
+</div>
+
+<!-- 掉落窗口：战斗胜利后必须手动投骰 -->
+<div id="lootModalBack" class="modalBack">
+  <div class="modal actionModal">
+    <button id="lootCloseBtn" class="modalClose" style="display:none" onclick="closeLootModal()">✕</button>
+    <h2>🎁 战利品掉落判定</h2>
+    <div id="lootScroll" class="actionScroll">
+      <div class="card" style="box-shadow:none;background:#f8f6f0">
+        <h3 id="lootTitle">🏆 魔物已击败！</h3>
+        <p id="lootDesc" class="muted">请进行一次掉落判定。熟练度越高，获得稀有素材的机会越高。</p>
+        <div id="lootRollResult" class="huntResult">🎲 尚未投掷掉落骰。</div>
+      </div>
+      <div id="lootLog" class="battleLog" style="height:180px;margin-top:10px"></div>
+    </div>
+    <button id="lootRollBtn" class="primary" style="width:100%;margin-top:12px" onclick="rollLoot()">🎲 投掷 D20 · 进行掉落判定</button>
+    <button id="lootReturnBtn" class="secondary" style="display:none;width:100%;margin-top:10px" onclick="closeLootModal()">返回地图</button>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL="https://sayzluvdkxscbzvaigja.supabase.co";
+const SUPABASE_KEY="sb_publishable_0FU46ikX3BapZYxXDRVKrA_K5jLe2K0";
+const db=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+
+/* -------------------------------------------------------------
+   👑 管理员邮箱配置 (在此填入允许开启 GM 后台的账号邮箱)
+   ------------------------------------------------------------- */
+const ADMIN_EMAILS = []; // 管理员现在由 Supabase 的 admins 表控制；此数组仅保留兼容，不再用于授权。
+
+/* -------------------------------------------------------------
+   👾 预设怪物库 (后续你可以在这里自由替换/扩展怪物名字与掉落)
+   ------------------------------------------------------------- */
+const PRESET_MONSTERS = [
+  { id: "m1", name: "暴食史莱姆", icon: "🟢", desc: "胶质形态的弱小魔物，最爱抢食掉落的碎屑。", level: 1, hp: 50, atk: 8, def: 2, drops: [{item_name:"透明黏液", item_desc:"浓稠的史莱姆分泌物，具有特殊的勾芡效果", min_count:1, max_count:3, drop_weight:80}] },
+  { id: "m2", name: "走地炸鸡鸟", icon: "🐓", desc: "羽毛带有油脂香气的怪鸟，受惊时会喷出微热火苗。", level: 2, hp: 75, atk: 12, def: 4, drops: [{item_name:"香脆鸟翅", item_desc:"多汁的肉质素材，富含油脂", min_count:1, max_count:2, drop_weight:70}, {item_name:"炸鸡羽毛", item_desc:"带有焦香味的羽毛", min_count:1, max_count:2, drop_weight:50}] },
+  { id: "m3", name: "狂暴野猪", icon: "🐗", desc: "雨林深处极具攻击性的野兽，肉质极为鲜美。", level: 3, hp: 110, atk: 18, def: 7, drops: [{item_name:"上等野猪肉", item_desc:"沉甸甸的鲜红肉块，烹饪佳品", min_count:1, max_count:2, drop_weight:60}, {item_name:"硬质猪獠牙", item_desc:"坚硬的獠牙素材", min_count:1, max_count:1, drop_weight:40}] },
+  { id: "m4", name: "椒盐巨型蝎", icon: "🦂", desc: "尾刺带有椒盐麻味的外壳魔物。", level: 4, hp: 140, atk: 22, def: 12, drops: [{item_name:"脆皮蝎尾", item_desc:"极具风味的甲壳素材，带天然麻辣味", min_count:1, max_count:2, drop_weight:50}] },
+  { id: "m5", name: "深海大章鱼", icon: "🐙", desc: "隐藏在水域深处的巨大软体魔物。", level: 5, hp: 200, atk: 28, def: 10, drops: [{item_name:"柔韧触手", item_desc:"弹性十足的鲜嫩肉质", min_count:2, max_count:4, drop_weight:50}] }
+];
+
+let currentUser=null;
+let currentAdventurer=null;
+let maps=[];
+let monsters=[];
+let selectedMap=null;
+let selectedMonster=null;
+let allAdventurersList=[]; // 管理员GM控制台用
+let currentIsAdmin=false;
+let currentAdminRole=null;
+
+function msg(t,c="muted"){
+  const e=document.getElementById("msg");
+  e.textContent=t;e.className=c;
+}
+
+function isAdmin(){
+  return !!currentIsAdmin;
+}
+
+async function refreshAdminStatus(){
+  currentIsAdmin=false;
+  currentAdminRole=null;
+  if(!currentUser) return false;
+  const {data,error}=await db.from("admins").select("user_id").eq("user_id",currentUser.id).maybeSingle();
+  if(error){
+    console.warn("管理员权限读取失败：",error.message);
+    return false;
+  }
+  if(data){
+    currentIsAdmin=true;
+    currentAdminRole="admin";
+  }
+  return currentIsAdmin;
+}
+
+async function signup(){
+  const email=document.getElementById("email").value.trim();
+  const password=document.getElementById("password").value;
+  const username=document.getElementById("username").value.trim();
+  const nickname=document.getElementById("nickname").value.trim();
+  if(!email||!password||!username||!nickname)return msg("注册请填写完整。","err");
+  const {error}=await db.auth.signUp({email,password,options:{data:{username,nickname}}});
+  if(error)return msg(error.message,"err");
+  msg("注册成功！如需验证邮箱，请先完成验证后再登录。","ok");
+}
+
+let authBusy=false;
+let gameLoading=false;
+
+function showLogin(message=""){
+  currentUser=null;
+  currentAdventurer=null;
+  document.getElementById("game").style.display="none";
+  document.getElementById("userBox").style.display="none";
+  document.getElementById("auth").style.display="block";
+  if(message) msg(message,"muted");
+}
+
+async function login(){
+  if(authBusy)return;
+  const email=document.getElementById("email").value.trim();
+  const password=document.getElementById("password").value;
+  if(!email||!password)return msg("请输入邮箱和密码。","err");
+  authBusy=true;
+  const btn=document.querySelector('#auth button[onclick="login()"]');
+  if(btn)btn.disabled=true;
+  msg("正在登录……","muted");
+  try{
+    const {data,error}=await db.auth.signInWithPassword({email,password});
+    if(error){
+      console.error("登录失败",error);
+      msg("登录失败："+(error.message||"邮箱或密码错误"),"err");
+      return;
+    }
+    if(data?.user) currentUser=data.user;
+  }catch(e){
+    console.error("登录异常",e);
+    msg("登录失败：网络或登录服务异常，请稍后再试。","err");
+  }finally{
+    authBusy=false;
+    if(btn)btn.disabled=false;
+  }
+}
+
+async function logout(){
+  if(authBusy)return;
+  authBusy=true;
+  try{
+    const {error}=await db.auth.signOut({scope:"local"});
+    if(error){
+      console.error("退出失败",error);
+      showLogin("退出失败："+(error.message||"请稍后再试"));
+      return;
+    }
+    showLogin("已退出登录，可以再次输入邮箱和密码登录。");
+  }catch(e){
+    console.error("退出异常",e);
+    showLogin("已退出登录，请重新登录。");
+  }finally{
+    authBusy=false;
+  }
+}
+
+function toggleSide(){
+  document.getElementById("side").classList.toggle("open");
+  document.getElementById("overlay").classList.toggle("show");
+}
+function closeSide(){
+  document.getElementById("side").classList.remove("open");
+  document.getElementById("overlay").classList.remove("show");
+}
+
+function showSection(name){
+  ["main","panel","inventory","bestiary","hunt","town","buff","recipe","admin"].forEach(x=>{
+    const sec=document.getElementById(x+"Section");
+    if(sec)sec.classList.toggle("active",x===name);
+    const nav=document.getElementById("nav"+x.charAt(0).toUpperCase()+x.slice(1));
+    if(nav)nav.classList.toggle("active",x===name);
+  });
+  closeSide();
+  if(name==="panel")loadPanel();
+  if(name==="inventory")loadInventory();
+  if(name==="bestiary")loadBestiary();
+  if(name==="hunt"){loadHuntData(); startTeamRefresh();}else{stopTeamRefresh();}
+  if(name==="recipe"){loadRecipeList();loadRecipeMapOptions();}
+  if(name==="town"){townOpen('shop');}
+  if(name==="buff"){renderCustomBuffs();}
+  if(name==="admin")loadAdminDashboard();
+}
+
+async function loadGame(userArg=null){
+  if(gameLoading)return;
+  gameLoading=true;
+  try{
+    let user=userArg;
+    if(!user){
+      const {data,error}=await db.auth.getSession();
+      if(error){
+        showLogin("登录状态读取失败，请重新登录。");
+        return;
+      }
+      user=data?.session?.user;
+    }
+    if(!user){ showLogin(); return; }
+
+    currentUser=user;
+    await refreshAdminStatus();
+    document.getElementById("auth").style.display="none";
+    document.getElementById("userBox").style.display="block";
+    document.getElementById("game").style.display="block";
+
+    const nickname=user.user_metadata?.nickname||user.email;
+    document.getElementById("who").textContent="👋 "+nickname;
+    document.getElementById("sideName").textContent="当前玩家："+nickname;
+
+    // GM判断与界面显示
+    const adminNavBtn = document.getElementById("navAdmin");
+    if(isAdmin()){
+      adminNavBtn.style.display="block";
+    }else{
+      adminNavBtn.style.display="none";
+    }
+
+    await loadAdventurer();
+  }finally{
+    gameLoading=false;
+  }
+}
+
+async function loadAdventurer(){
+  const {data,error}=await db.from("adventurers").select("*").eq("user_id",currentUser.id).maybeSingle();
+
+  if(error){
+    document.getElementById("welcomeText").textContent="角色资料读取失败："+error.message;
+    return;
+  }
+
+  currentAdventurer=data;
+
+  if(!data){
+    document.getElementById("setupBack").classList.add("show");
+    document.getElementById("welcomeText").textContent="你还没有创建冒险者，请先填写角色资料。";
+    return;
+  }
+
+  document.getElementById("welcomeText").textContent=
+    "欢迎回来，"+data.name+"！今天也去冒险吧。";
+  await loadPanel();
+}
+
+function val(id){ return Number(document.getElementById(id).value)||0; }
+
+function updateSum(){
+  const sum=val("a_technique")+val("a_endurance")+val("a_taste")+
+    val("a_magic")+val("a_smell")+val("a_proficiency");
+  const e=document.getElementById("sumText");
+  e.textContent="当前属性总和："+sum+" / 50";
+  e.className=sum>=36&&sum<=50?"ok":"muted";
+}
+["a_technique","a_endurance","a_taste","a_magic","a_smell","a_proficiency"].forEach(id=>{
+  document.addEventListener("input",e=>{if(e.target.id===id)updateSum()});
+});
+
+async function createAdventurer(){
+  const name=document.getElementById("a_name").value.trim();
+  const age=Number(document.getElementById("a_age").value);
+  const gender=document.getElementById("a_gender").value.trim();
+  const height=document.getElementById("a_height").value.trim();
+  const race=document.getElementById("a_race").value.trim();
+  const job=document.getElementById("a_job").value.trim();
+
+  const technique=val("a_technique");
+  const endurance=val("a_endurance");
+  const taste=val("a_taste");
+  const magic_sense=val("a_magic");
+  const smell=val("a_smell");
+  const proficiency=val("a_proficiency");
+  const sum=technique+endurance+taste+magic_sense+smell+proficiency;
+
+  if(!name||!age||!gender||!height||!race||!job){
+    document.getElementById("setupMsg").textContent="请把基础资料全部填写完整。";
+    document.getElementById("setupMsg").className="err";
+    return;
+  }
+  if(sum<36||sum>50){
+    document.getElementById("setupMsg").textContent="属性总和必须在 36～50 之间，目前是 "+sum+"。";
+    document.getElementById("setupMsg").className="err";
+    return;
+  }
+
+  const {data,error}=await db.from("adventurers").insert({
+    user_id:currentUser.id,name,age,gender,height,race,job,
+    technique,endurance,taste,magic_sense,smell,proficiency,
+    action_points:5,max_action_points:5,coins:0,
+    unlocked_monsters: []
+  }).select().single();
+
+  if(error){
+    document.getElementById("setupMsg").textContent="创建失败："+error.message;
+    document.getElementById("setupMsg").className="err";
+    return;
+  }
+
+  currentAdventurer=data;
+  document.getElementById("setupBack").classList.remove("show");
+  document.getElementById("welcomeText").textContent="欢迎，"+data.name+"！你的冒险者档案已经创建完成。";
+  await loadPanel();
+}
+
+async function loadPanel(){
+  if(!currentUser)return;
+  if(!currentAdventurer)await loadAdventurer();
+  if(!currentAdventurer)return;
+
+  const d=currentAdventurer;
+  document.getElementById("panel").innerHTML=`
+    <div class="card" style="box-shadow:none;background:#f8f6f0">
+      <h3>【冒险者档案】</h3>
+      <div class="grid">
+        <div>👤 姓名：${escapeHtml(d.name)}</div>
+        <div>🎂 年龄：${d.age} 岁</div>
+        <div>⚧ 性别：${escapeHtml(d.gender)}</div>
+        <div>📏 身高：${escapeHtml(d.height)}</div>
+        <div>🧬 种族：${escapeHtml(d.race)}</div>
+        <div>⚔️ 职业：${escapeHtml(d.job)}</div>
+        <div>📍 位置：${escapeHtml(d.location||"城镇")}</div>
+        <div>⚡ 行动点：${d.action_points??0} / ${d.max_action_points??5}</div>
+        <div>💰 金币：${d.coins??0} 枚</div>
+        <div>🏆 等级：${d.level??1}</div>
+        <div>⭐ 分数：${d.score??0}</div>
+      </div>
+    </div>
+    <div class="card" style="box-shadow:none;background:#f8f6f0">
+      <h3>【基础属性面板】</h3>
+      <span class="stat">🗡️ 技巧 ${d.technique}</span>
+      <span class="stat">🛡️ 耐力 ${d.endurance}</span>
+      <span class="stat">👅 味觉 ${d.taste}</span>
+      <span class="stat">✨ 魔力感知 ${d.magic_sense}</span>
+      <span class="stat">👃 嗅觉 ${d.smell}</span>
+      <span class="stat">📈 熟练度 ${d.proficiency}</span>
+    </div>`;
+}
+
+async function loadInventory(){
+  const box=document.getElementById("inventory");
+  box.innerHTML="<p class='muted'>正在读取背包……</p>";
+
+  const {data,error}=await db.from("inventory").select("*")
+    .eq("player_id",currentUser.id)
+    .order("id",{ascending:true});
+
+  if(error){
+    box.innerHTML="<p class='err'>读取背包失败："+escapeHtml(error.message)+"</p>";
+    return;
+  }
+  if(!data?.length){
+    box.innerHTML="<p class='muted'>🎒 背包目前是空的。</p>";
+    return;
+  }
+
+  box.innerHTML=data.map(item=>{
+    const count=getItemCount(item);
+    return `
+      <div class="inventoryItem">
+        <span class="badge">×${count}</span>
+        <b>📦 ${escapeHtml(item.item_name)}</b>
+        <p class="muted">${escapeHtml(item.item_desc||"暂无物品说明")}</p>
+      </div>`;
+  }).join("");
+}
+
+/* =========================
+   📖 怪物图鉴（战胜后解锁）
+   ========================= */
+async function loadBestiary(){
+  const listEl = document.getElementById("bestiaryList");
+  listEl.innerHTML = "<p class='muted'>读取图鉴中……</p>";
+
+  const unlocked = currentAdventurer?.unlocked_monsters || [];
+
+  listEl.innerHTML = PRESET_MONSTERS.map(m => {
+    const isUnlocked = unlocked.includes(m.id) || unlocked.includes(m.name);
+    if(isUnlocked){
+      return `
+        <div class="bestiaryCard">
+          <span class="badge ok">✦ 已解锁档案</span>
+          <b>${m.icon} ${escapeHtml(m.name)} (Lv.${m.level})</b>
+          <p>${escapeHtml(m.desc)}</p>
+          <div class="small muted">
+            ❤️ HP: ${m.hp} | ⚔️ 攻击: ${m.atk} | 🛡️ 防御: ${m.def}<br>
+            🎁 掉落物: ${m.drops.map(d=>d.item_name).join("、")}
+          </div>
+        </div>`;
+    }else{
+      return `
+        <div class="bestiaryCard locked">
+          <span class="badge locked">🔒 未击败</span>
+          <b>❓ ？？？？？？</b>
+          <p class="muted">在战斗中成功击败该魔物后可解锁档案与详细信息。</p>
+        </div>`;
+    }
+  }).join("");
+}
+
+/* =========================
+   🍳 料理提交与查看
+   ========================= */
+async function submitRecipe(){
+  const name = document.getElementById("recipeName").value.trim();
+  const desc = document.getElementById("recipeDesc").value.trim();
+  const requestedMap = document.getElementById("recipeMapRequest")?.value || "";
+  const msgEl = document.getElementById("recipeMsg");
+
+  if(!name || !desc || !requestedMap){
+    msgEl.textContent = "请填写料理名称、描述，并选择希望解锁的地图。";
+    msgEl.className = "err";
+    return;
+  }
+
+  msgEl.textContent = "提交中……";
+  const { error } = await db.from("recipe_submissions").insert({
+    user_id: currentUser.id,
+    author_name: currentAdventurer?.name || currentUser.user_metadata?.nickname || "未知厨师",
+    recipe_name: name,
+    recipe_desc: desc,
+    requested_map_name: requestedMap,
+    status: "pending"
+  });
+
+  if(error){
+    msgEl.textContent = "提交失败：" + error.message;
+    msgEl.className = "err";
+  }else{
+    msgEl.textContent = "🎉 提交成功！请等待管理员审核。审核通过后将为你和全服解锁新地图！";
+    msgEl.className = "ok";
+    document.getElementById("recipeName").value = "";
+    document.getElementById("recipeDesc").value = "";
+    if(document.getElementById("recipeMapRequest"))document.getElementById("recipeMapRequest").selectedIndex=0;
+    loadRecipeList();
+  }
+}
+
+async function loadRecipeList(){
+  const box = document.getElementById("recipeList");
+  const { data, error } = await db.from("recipe_submissions").select("*").eq("user_id", currentUser.id).order("created_at", {ascending:false});
+  if(error || !data || !data.length){
+    box.innerHTML = "<p class='muted'>暂无提交记录。</p>";
+    return;
+  }
+  box.innerHTML = data.map(r => `
+    <div class="recipeItem">
+      <span class="badge ${r.status==='approved'?'ok':r.status==='rejected'?'err':''}">${r.status==='approved'?'✅ 已审核通过':r.status==='rejected'?'❌ 未通过':'⏳ 待审核'}</span>
+      <b>🍳 ${escapeHtml(r.recipe_name)}</b>
+      <p class="small muted">${escapeHtml(r.description ?? r.recipe_desc ?? "")}</p>
+      ${r.unlocked_map_name ? `<p class="small ok">🗺️ 已解锁地图：${escapeHtml(r.unlocked_map_name)}</p>` : ''}
+    </div>
+  `).join("");
+}
+
+/* =========================
+   地图 / 魔物 / 战斗
+   ========================= */
+
+function startTeamRefresh(){
+  if(teamRefreshTimer)return;
+  teamRefreshTimer=setInterval(async()=>{
+    if(currentUser && document.getElementById("huntSection")?.classList.contains("active")){
+      await refreshTeam();
+      if(document.getElementById("huntModalBack")?.classList.contains("show")) renderEncounterTeamSummary();
+    }
+  },4000);
+}
+function stopTeamRefresh(){
+  if(teamRefreshTimer){clearInterval(teamRefreshTimer);teamRefreshTimer=null;}
+}
+
+// 默认开放的地图
+const DEFAULT_UNLOCKED_MAPS = ["美食镇", "雨林"];
+
+async function loadHuntData(){
+  const status=document.getElementById("huntStatus");
+  status.textContent="正在读取地图……";
+  document.getElementById("maps").innerHTML="";
+  selectedMap=null; selectedMonster=null;
+
+  // 1. 读取当前玩家自己的地图解锁列表
+  const {data:unlockedData, error:unlockError} = await db.from("player_unlocked_maps").select("map_name").eq("user_id", currentUser.id);
+  const serverUnlocked = (unlockedData||[]).map(x=>x.map_name);
+  if(unlockError){ console.warn("读取玩家地图权限失败", unlockError); }
+
+  // 2. 读取所有地图
+  const {data,error}=await db.from("game_regions").select("*").order("id",{ascending:true});
+  if(error){status.innerHTML="<span class='err'>读取地图失败："+escapeHtml(error.message)+"</span>";return;}
+  maps=data||[];
+  if(!maps.length){
+    // 如果数据库为空，填充默认示例地图
+    maps = [
+      { id: 1, name: "美食镇", description: "香气扑鼻的大城镇，新手冒险者的起点。", danger_level: 1, icon: "🏘️" },
+      { id: 2, name: "雨林", description: "潮湿茂密的原始森林，栖息着多汁的植物与野兽。", danger_level: 2, icon: "🌴" },
+      { id: 3, name: "烈焰火山", description: "火元素密集的危险区域，料理顶级烧烤素材的圣地。", danger_level: 4, icon: "🌋" },
+      { id: 4, name: "深海冰洞", description: "极寒之地，盛产珍稀的冷水海鲜魔物。", danger_level: 5, icon: "❄️" }
+    ];
+  }
+
+  // 标记地图解锁状态
+  maps.forEach(m => {
+    const name = mapName(m);
+    m.isLocked = !(DEFAULT_UNLOCKED_MAPS.includes(name) || serverUnlocked.includes(name));
+  });
+
+  status.textContent="点击解开锁定的地图进入该区域。未解锁地图需提交料理并经 GM 审核。";
+  renderMaps();
+}
+
+function mapName(m){return m.name ?? m.region_name ?? m.title ?? m.location_name ?? m.region_key ?? ("地图 #"+m.id)}
+function mapDesc(m){return m.description ?? m.desc ?? "暂无地图说明"}
+function mapDanger(m){const n=Number(m.danger_level);return Number.isFinite(n)?n:0}
+
+function renderMaps(){
+  document.getElementById("maps").innerHTML=maps.map(m=>{
+    const locked = m.isLocked;
+    return `
+    <div class="mapItem ${locked?'locked':''}">
+      <b>${escapeHtml(m.icon||"🗺️")} ${escapeHtml(mapName(m))}</b>
+      <span class="badge ${locked?'locked':''}">${locked?'🔒 锁定中':('危险度 '+mapDanger(m))}</span>
+      <p class="muted">${escapeHtml(mapDesc(m))}</p>
+      ${locked? `<p class="small err">🔒 需要通过烹饪料理提交解锁该区域</p>` : `<button class="primary" onclick="selectMap('${escapeJs(String(m.id))}')">进入地图 →</button>`}
+    </div>`;
+  }).join("");
+}
+
+async function selectMap(id){
+  selectedMap=maps.find(m=>String(m.id)===String(id))||null;
+  if(!selectedMap||selectedMap.isLocked)return;
+
+  const inTeam=!!activeTeam;
+  document.getElementById("huntModalTitle").textContent="🗺️ "+mapName(selectedMap)+" · "+(inTeam?"队伍遭遇":"单人遭遇");
+  document.getElementById("huntModalDesc").textContent=mapDesc(selectedMap)+"　危险度："+mapDanger(selectedMap);
+  document.getElementById("huntModalMsg").textContent="🎲 正在进行遭遇检定……";
+  document.getElementById("encounters").innerHTML="<p class='muted'>🎲 d20 遭遇检定中……</p>";
+  document.getElementById("encounterStartBtn").disabled=true;
+  document.getElementById("huntModalBack").classList.add("show");
+
+  await refreshTeam();
+
+  // 使用预设与数据库结合的怪物列表
+  monsters = PRESET_MONSTERS;
+
+  const encounterRoll=d20();
+  const index=(encounterRoll-1)%monsters.length;
+  selectedMonster=monsters[index];
+
+  const senseBonus=Number(currentAdventurer?.smell||0)+Math.floor(Number(currentAdventurer?.magic_sense||0)/2);
+  const encounterTarget=8+mapDanger(selectedMap)*2;
+  const encounterTotal=encounterRoll+senseBonus;
+  const noticed=encounterTotal>=encounterTarget;
+
+  const st=buildMonsterStats(selectedMonster,selectedMap);
+  document.getElementById("encounters").innerHTML=`
+    <div class="encounter selected">
+      <b>🎲 遭遇结果：${encounterRoll} + 嗅觉/魔力感知 ${senseBonus} = ${encounterTotal}</b>
+      <span class="badge">${noticed?"发现魔物":"勉强发现"}</span>
+      <h3 style="margin:10px 0 6px">${selectedMonster.icon||"👾"} ${escapeHtml(monsterName(selectedMonster))} · Lv.${st.level}</h3>
+      <div class="statline"><span>❤️ HP</span><b>${st.maxHp}</b></div>
+      <div class="statline"><span>🛡️ 防御</span><b>${st.defense}</b></div>
+      <div class="statline"><span>⚔️ 攻击</span><b>${st.attack}</b></div>
+      <div class="statline"><span>💨 速度</span><b>${st.speed}</b></div>
+      <p class="small muted">可能发现：${escapeHtml((selectedMonster.drops||[]).map(d=>d.item_name).slice(0,5).join("、")||"未知素材")}</p>
+    </div>`;
+
+  renderEncounterTeamSummary();
+  document.getElementById("huntModalMsg").textContent=
+    inTeam ? "👥 队伍遭遇成立！所有队员的属性会参与本次跑团战斗。"
+           : "🧑 单人遭遇成立！你的六项属性决定战斗检定。";
+  document.getElementById("encounterStartBtn").disabled=false;
+}
+
+function closeHuntModal(){document.getElementById("huntModalBack").classList.remove("show")}
+function monsterName(m){return m.name ?? m.monster_name ?? m.title ?? ("魔物 #"+m.id)}
+function hashId(v){let n=0;for(const c of String(v)){n=(n*31+c.charCodeAt(0))%997}return n}
+
+function buildMonsterStats(m,map){
+  const danger=Math.max(0,mapDanger(map));
+  const level=m.level || Math.max(1,danger+1+(hashId(m.id)%3));
+  return {
+    level,
+    maxHp:Math.max(1,Number(m.hp)|| (50+level*18+(hashId(m.id)%16))),
+    attack: m.atk || (7+level*3+(hashId(m.id)%5)),
+    defense: m.def || (3+Math.floor(level*1.5)),
+    speed: 5+level+(hashId(m.id)%4)
+  };
+}
+
+function statMod(v){ return Math.floor((Number(v||0)-6)/2); }
+function d20(){return Math.floor(Math.random()*20)+1}
+function d6(){return Math.floor(Math.random()*6)+1}
+
+function rollCheck(label,attribute,target,extra=0){
+  const raw=d20(), mod=statMod(attribute), total=raw+mod+extra;
+  const crit=raw===20, fumble=raw===1;
+  addBattleLog(`🎲 ${label}：d20(${raw}) + 属性修正(${mod})${extra?` + 协作(${extra})`:``} = ${total}，目标 ${target}`);
+  return {raw,mod,total,crit,fumble,success:crit||(!fumble&&total>=target)};
+}
+
+function buildPlayerStats(a){
+  const technique=Number(a.technique||0);
+  const endurance=Number(a.endurance||0);
+  const taste=Number(a.taste||0);
+  const magic=Number(a.magic_sense||0);
+  const smell=Number(a.smell||0);
+  const proficiency=Number(a.proficiency||0);
+  return {
+    technique,endurance,taste,magic,smell,proficiency,
+    maxHp:Math.max(30,30+endurance*5),
+    attack:4+technique,
+    defense:8+endurance,
+    magicAttack:4+magic+Math.floor(taste/2),
+    initiative:5+smell,
+    crit:5+smell*2
+  };
+}
+
+let battle=null;
+let activeTeam=null;
+let teamMembers=[];
+let teamRefreshTimer=null;
+
+async function refreshTeam(){
+  if(!currentUser)return;
+  const msg=document.getElementById("teamMsg");
+  if(!msg)return;
+
+  const {data,error}=await db.from("hunt_team_members")
+    .select("team_id,player_id,member_name,joined_at,hunt_teams(id,code,status,leader_id)")
+    .eq("player_id",currentUser.id);
+
+  if(error){
+    msg.textContent="组队读取失败："+error.message;
+    activeTeam=null; teamMembers=[];
+    renderTeamMembers();
+    return;
+  }
+
+  const row=(data||[]).find(x=>x.hunt_teams?.status==="active");
+  activeTeam=row?.hunt_teams||null;
+  if(activeTeam){
+    await loadTeamMembers(activeTeam.id);
+    msg.textContent=`当前队伍：${activeTeam.code}　共 ${teamMembers.length} 人`;
+  }else{
+    teamMembers=[];
+    msg.textContent="当前未加入临时队伍。";
+  }
+  renderTeamMembers();
+}
+
+async function loadTeamMembers(teamId){
+  const {data,error}=await db.from("hunt_team_members")
+    .select("player_id,member_name,joined_at")
+    .eq("team_id",teamId)
+    .order("joined_at",{ascending:true});
+  if(error){
+    teamMembers=[];
+    return;
+  }
+  teamMembers=data||[];
+}
+
+function renderTeamMembers(){
+  const el=document.getElementById("teamMembers");
+  if(!el)return;
+  if(!activeTeam){
+    el.innerHTML="<p class='small muted'>还没有临时队伍。你也可以直接点地图单人狩猎。</p>";
+    return;
+  }
+  el.innerHTML=`<div class="small muted">👥 队伍成员</div>`+
+    (teamMembers.length?teamMembers.map((m,i)=>`
+      <div class="teamMember">
+        <b>${i===0?"👑 ":"🧑 "}${escapeHtml(m.member_name||"冒险者")}${String(m.player_id)===String(currentUser.id)?"（你）":""}</b>
+        <span class="small muted">角色姓名：${escapeHtml(m.member_name)}</span>
+      </div>`).join("")
+    :"<p class='small muted'>暂无成员。</p>");
+}
+
+function renderEncounterTeamSummary(){
+  const title=document.getElementById("encounterModeTitle");
+  const desc=document.getElementById("encounterModeDesc");
+  const box=document.getElementById("encounterTeamSummary");
+  if(!title||!desc||!box)return;
+
+  if(!activeTeam){
+    title.textContent="🎲 单人遭遇";
+    desc.textContent="你的六项属性独立决定检定结果。";
+    box.innerHTML="";
+    return;
+  }
+  title.textContent=`👥 队伍遭遇 · ${activeTeam.code}`;
+  desc.textContent="队伍人数会影响协作骰与稀有部件掉落。";
+  box.innerHTML=teamMembers.map(m=>`
+    <span class="stat">🧑 ${escapeHtml(m.member_name||"冒险者")}</span>
+  `).join("");
+}
+
+async function createHuntTeam(){
+  if(!currentUser)return;
+  const msg=document.getElementById("teamMsg");
+  await leaveHuntTeam(true);
+  const code=Math.random().toString(36).slice(2,6).toUpperCase();
+  // 使用角色面板里的【角色名字】
+  const name=currentAdventurer?.name||"无名冒险者";
+
+  const {data,error}=await db.from("hunt_teams")
+    .insert({leader_id:currentUser.id,code,status:"active"})
+    .select().single();
+  if(error){ msg.textContent="创建失败："+error.message; return; }
+
+  const {error:e2}=await db.from("hunt_team_members")
+    .insert({team_id:data.id,player_id:currentUser.id,member_name:name});
+  if(e2){ msg.textContent="队伍已创建，但加入成员失败："+e2.message; return; }
+
+  activeTeam=data;
+  await loadTeamMembers(data.id);
+  msg.textContent=`队伍创建成功！邀请码：${code}　把这个码发给队友即可加入。`;
+  renderTeamMembers();
+}
+
+async function joinHuntTeam(){
+  if(!currentUser)return;
+  const code=document.getElementById("teamCodeInput").value.trim().toUpperCase();
+  const msg=document.getElementById("teamMsg");
+  if(!code){msg.textContent="请输入队伍邀请码。";return;}
+
+  const {data,error}=await db.from("hunt_teams")
+    .select("*").eq("code",code).eq("status","active").maybeSingle();
+  if(error||!data){ msg.textContent="找不到这个临时队伍，确认邀请码是否正确。"; return; }
+
+  await leaveHuntTeam(true);
+  // 使用角色面板里的【角色名字】
+  const name=currentAdventurer?.name||"无名冒险者";
+  const {error:e}=await db.from("hunt_team_members")
+    .insert({team_id:data.id,player_id:currentUser.id,member_name:name});
+  if(e){ msg.textContent="加入失败："+e.message; return; }
+
+  activeTeam=data;
+  await loadTeamMembers(data.id);
+  msg.textContent=`已加入队伍：${code}`;
+  renderTeamMembers();
+}
+
+async function leaveHuntTeam(silent=false){
+  if(currentUser){
+    const {data}=await db.from("hunt_team_members")
+      .select("team_id").eq("player_id",currentUser.id);
+    for(const r of (data||[])){
+      await db.from("hunt_team_members").delete()
+        .eq("team_id",r.team_id).eq("player_id",currentUser.id);
+    }
+  }
+  activeTeam=null;
+  teamMembers=[];
+  renderTeamMembers();
+  if(!silent&&document.getElementById("teamMsg"))
+    document.getElementById("teamMsg").textContent="已离开临时队伍。";
+}
+
+function teamCoopBonus(){ return activeTeam ? Math.max(0,Math.min(4,teamMembers.length-1)) : 0; }
+function teamMemberCount(){ return activeTeam ? Math.max(1,teamMembers.length) : 1; }
+
+async function startBattle(){
+  if(!selectedMonster||!selectedMap||!currentAdventurer)return;
+  if(Number(currentAdventurer.action_points||0)<1){
+    const e=document.getElementById("huntModalMsg");
+    if(e){e.textContent="行动点不足，请先去客栈休息。";e.className="err";}
+    return;
+  }
+
+  // 进入战斗的瞬间扣 1 AP；无论之后胜利、失败还是逃跑，都不返还。
+  const newAP=Math.max(0,Number(currentAdventurer.action_points||0)-1);
+  const {data:apData,error:apError}=await db.from("adventurers")
+    .update({action_points:newAP})
+    .eq("user_id",currentUser.id)
+    .select().single();
+  if(apError||!apData){
+    const e=document.getElementById("huntModalMsg");
+    if(e){e.textContent="无法扣除行动点，战斗没有开始："+(apError?.message||"未知错误");e.className="err";}
+    return;
+  }
+  currentAdventurer=apData;
+  closeHuntModal();
+
+  const p=buildPlayerStats(currentAdventurer);
+  const m=buildMonsterStats(selectedMonster,selectedMap);
+  const coop=teamCoopBonus();
+  const partySize=teamMemberCount();
+
+  battle={
+    round:1,turn:"player",player:p,monster:m,
+    playerHp:p.maxHp,monsterHp:m.maxHp,
+    guardPower:0,weaknessKnown:false,ended:false,won:false,escaped:false,
+    log:[],teamSize:partySize,coopBonus:coop,
+    awaitingDodge:false,awaitingSense:false,pendingDodge:null,lootFinished:false
+  };
+
+  // 先显示并刷新 HP，再写战斗日志。这样即使地图名称/队伍提示异常，也不会出现 0 / 0。
+  document.getElementById("battleModalBack").classList.add("show");
+  document.getElementById("battleResult").style.display="none";
+  document.getElementById("battleActions").style.display="grid";
+  document.getElementById("battlePlayerName").textContent=currentAdventurer.name||"冒险者";
+  document.getElementById("battleMonsterName").textContent=(selectedMonster.icon||"👾")+" "+monsterName(selectedMonster)+" Lv."+m.level;
+  updateBattleUI();
+  try{
+    addBattleLog(activeTeam?`👥 ${partySize} 人临时队伍进入「${mapName(selectedMap)}」。`:`🧑 你独自进入「${mapName(selectedMap)}」。`);
+  }catch(e){
+    console.warn("战斗提示生成失败：",e);
+    addBattleLog("🗺️ 已进入战斗。",true);
+  }
+  addBattleLog("⚡ 进入战斗，已消耗 1 AP；逃跑不会返还 AP。",true);
+  addBattleLog("🎲 规则：你行动一次 → 魔物行动一次。魔物攻击时由你选择闪避、防御、吃血药或逃跑。",true);
+}
+
+function addBattleLog(text,important=false){
+  if(!battle)return;
+  battle.log.push((important?"【":"")+text+(important?"】":""));
+  const box=document.getElementById("battleLog");
+  if(box)box.innerHTML=battle.log.map(x=>"<div>"+escapeHtml(x)+"</div>").join("");
+  if(box)box.scrollTop=box.scrollHeight;
+}
+
+function setBattleTurn(turn){
+  if(!battle)return;
+  battle.turn=turn;
+  const el=document.getElementById("battleRound");
+  if(el)el.innerHTML=`<b>第 ${battle.round} 回合</b><span>${turn==="player"?"轮到你行动":"魔物正在攻击"}</span>`;
+  const actions=document.getElementById("battleActions");
+  if(actions)actions.style.display=turn==="player"&&!battle.ended?"grid":"none";
+}
+
+function updateBattleUI(){
+  if(!battle)return;
+  const p=battle.player,m=battle.monster;
+  const hp1=Math.max(0,Math.round(battle.playerHp)),hp2=Math.max(0,Math.round(battle.monsterHp));
+  document.getElementById("playerHpText").textContent=hp1+" / "+p.maxHp;
+  document.getElementById("monsterHpText").textContent=hp2+" / "+m.maxHp;
+  document.getElementById("playerHpFill").style.width=(Math.max(0,battle.playerHp)/p.maxHp*100)+"%";
+  document.getElementById("monsterHpFill").style.width=(Math.max(0,battle.monsterHp)/m.maxHp*100)+"%";
+  document.getElementById("playerBattleStats").textContent=`技巧 ${p.technique}　耐力 ${p.endurance}　味觉 ${p.taste}　熟练度 ${p.proficiency}`;
+  document.getElementById("monsterBattleStats").textContent=`攻击 ${m.attack}　防御 ${m.defense}　速度 ${m.speed}`;
+  setBattleTurn(battle.turn||"player");
+}
+
+function rollDamage(base){return Math.max(1,Math.round(base+d6()-3));}
+
+async function battleAction(action){
+  if(!battle||battle.ended||battle.turn!=="player"||battle.awaitingDodge||battle.awaitingSense)return;
+  const p=battle.player,m=battle.monster,coop=battle.coopBonus||0;
+
+  if(action==="attack"){
+    const r=rollCheck("技巧攻击",p.technique,10+m.defense,coop);
+    if(r.fumble) addBattleLog("💥 大失败！你失去平衡，本回合攻击落空。");
+    else if(r.success){
+      let dmg=rollDamage(p.attack+(r.crit?4:0)+coop);
+      if(battle.weaknessKnown)dmg+=Math.max(1,Math.floor(p.taste/2));
+      battle.monsterHp-=dmg;
+      addBattleLog(`🗡️ 命中！造成 ${dmg} 点伤害${r.crit?"（大成功加成）":""}。`);
+    }else addBattleLog("🛡️ 未命中魔物。");
+  }else if(action==="defend"){
+    battle.guardPower=0.6;
+    addBattleLog("🛡️ 你采取防御姿态：魔物本次攻击伤害降低 60%。");
+  }else if(action==="potion"){
+    const used=await useBattlePotion();
+    if(!used)return; // 没有血药时，不消耗这个回合
+  }else if(action==="sense"){
+    openSenseModal();
+    return;
+  }else if(action==="run"){
+    await attemptRun("玩家回合");
+    return;
+  }else return;
+
+  updateBattleUI();
+  if(battle.monsterHp<=0){await finishBattle(true);return;}
+  await monsterTurn();
+}
+
+function openSenseModal(){
+  if(!battle||battle.ended||battle.turn!=="player")return;
+  battle.awaitingSense=true;
+  document.getElementById("senseModalBack").classList.add("show");
+  document.getElementById("senseResult").textContent="🎲 尚未进行判定。";
+  document.getElementById("senseHistory").innerHTML=(battle.log||[]).map(x=>"<div>"+escapeHtml(x)+"</div>").join("");
+  document.getElementById("senseBtn").disabled=false;
+}
+
+async function resolveSense(){
+  if(!battle||battle.ended||!battle.awaitingSense)return;
+  const p=battle.player,m=battle.monster,coop=battle.coopBonus||0;
+  const r=rollCheck("魔力感知·弱点分析",p.magic,10+m.level,coop);
+  const result=document.getElementById("senseResult");
+  document.getElementById("senseBtn").disabled=true;
+  if(r.success){
+    battle.weaknessKnown=true;
+    result.textContent=`🔍 感知成功！D20(${r.raw}) + 魔力感知修正(${r.mod})${coop?` + 协作 ${coop}`:""} = ${r.total}。发现 ${monsterName(selectedMonster)} 的弱点！后续攻击获得额外伤害。`;
+    addBattleLog("✨ 感知弱点成功！后续攻击获得额外伤害。",true);
+  }else{
+    result.textContent=`❌ 感知失败。D20(${r.raw}) + 魔力感知修正(${r.mod})${coop?` + 协作 ${coop}`:""} = ${r.total}，未达到目标 ${10+m.level}。`;
+    addBattleLog("✨ 感知弱点失败，本次没有发现弱点。");
+  }
+  document.getElementById("senseHistory").innerHTML=(battle.log||[]).map(x=>"<div>"+escapeHtml(x)+"</div>").join("");
+  battle.awaitingSense=false;
+  setTimeout(async()=>{
+    closeSenseModal();
+    if(!battle||battle.ended)return;
+    updateBattleUI();
+    await monsterTurn();
+  },700);
+}
+
+function closeSenseModal(){document.getElementById("senseModalBack").classList.remove("show")}
+
+async function monsterTurn(){
+  if(!battle||battle.ended)return;
+  battle.turn="monster";
+  battle.awaitingDodge=true;
+  const m=battle.monster;
+  const raw=d20();
+  const target=10+m.attack;
+  battle.pendingDodge={raw,target,monsterAttack:m.attack};
+  setBattleTurn("monster");
+  document.getElementById("dodgeModalBack").classList.add("show");
+  document.getElementById("dodgeBtn").disabled=false;
+  document.getElementById("dodgeRollInfo").textContent=`👾 ${monsterName(selectedMonster)} 的攻击骰已经投出：D20(${raw})\n\n请选择你要怎么应对这次攻击。`;
+  document.getElementById("dodgeDesc").textContent=`魔物攻击力：${m.attack}　你的选择：闪避 / 防御 / 吃血药 / 逃跑`;
+  document.getElementById("dodgeLog").innerHTML=(battle.log||[]).map(x=>"<div>"+escapeHtml(x)+"</div>").join("");
+}
+
+async function useBattlePotion(){
+  if(!currentUser||!battle)return false;
+  const {data,error}=await db.from("inventory")
+    .select("id,item_name,item_desc,item_count")
+    .eq("player_id",currentUser.id)
+    .order("id",{ascending:true});
+  if(error){addBattleLog("❌ 无法读取背包，暂时不能使用血药。",true);return false;}
+  const item=(data||[]).find(x=>getItemCount(x)>0&&/(血药|回复药|治疗药|生命药|恢复药)/.test(x.item_name||""));
+  if(!item){addBattleLog("🧪 背包里没有可用的血药。");return false;}
+  const oldCount=getItemCount(item);
+  const newCount=Math.max(0,oldCount-1);
+  const {error:updateError}=await db.from("inventory").update({item_count:newCount}).eq("id",item.id).eq("player_id",currentUser.id);
+  if(updateError){addBattleLog("❌ 血药使用失败："+updateError.message,true);return false;}
+  const heal=Math.min(30,battle.player.maxHp-battle.playerHp);
+  battle.playerHp=Math.min(battle.player.maxHp,battle.playerHp+30);
+  addBattleLog(heal>0?`🧪 你使用「${item.item_name}」，恢复 ${heal} HP。`:`🧪 你使用「${item.item_name}」，但当前 HP 已满。`);
+  return true;
+}
+
+async function attemptRun(source){
+  if(!battle||battle.ended)return;
+  const p=battle.player,m=battle.monster;
+  const r=rollCheck("嗅觉·逃跑",p.smell,12+m.level,battle.coopBonus||0);
+  if(r.success){
+    battle.ended=true;
+    battle.escaped=true;
+    battle.won=false;
+    addBattleLog(`🏃 逃跑成功！你离开了「${monsterName(selectedMonster)}」。1 AP 已消耗，不会返还。`,true);
+    document.getElementById("dodgeModalBack").classList.remove("show");
+    document.getElementById("senseModalBack").classList.remove("show");
+    document.getElementById("battleActions").style.display="none";
+    document.getElementById("battleResult").style.display="block";
+    document.getElementById("battleResult").textContent="🏃 已成功逃跑\n消耗：1 AP（不返还）";
+    setTimeout(()=>{
+      document.getElementById("battleModalBack").classList.remove("show");
+      battle=null;
+      loadPanel();
+      refreshTeam();
+    },700);
+    return;
+  }
+  addBattleLog(`🏃 逃跑失败（${source}）：魔物没有放你离开。`);
+  if(source==="玩家回合"){
+    await monsterTurn();
+  }else{
+    await resolveMonsterHit(false);
+  }
+}
+
+async function resolveMonsterResponse(action){
+  if(!battle||battle.ended||!battle.awaitingDodge)return;
+  if(action==="run"){
+    await attemptRun("魔物回合");
+    return;
+  }
+  if(action==="potion"){
+    const used=await useBattlePotion();
+    if(!used)return;
+    // 吃药不能同时躲掉已经发动的攻击：魔物照常造成伤害。
+    await resolveMonsterHit(false);
+    return;
+  }
+  if(action==="defend"){
+    battle.guardPower=0.6;
+    addBattleLog("🛡️ 你选择防御！这次魔物攻击伤害降低 60%。");
+    await resolveMonsterHit(false);
+    return;
+  }
+  if(action==="dodge"){
+    const p=battle.player,pending=battle.pendingDodge;
+    const mod=statMod(p.smell);
+    const total=pending.raw+mod+(battle.coopBonus||0);
+    const success=pending.raw===20||(pending.raw!==1&&total>=pending.target);
+    addBattleLog(`💨 闪避判定：D20(${pending.raw}) + 嗅觉修正(${mod})${battle.coopBonus?` + 协作(${battle.coopBonus})`:""} = ${total}，目标 ${pending.target}`);
+    if(success){
+      addBattleLog("💨 闪避成功！你完全避开了魔物攻击。",true);
+      await endMonsterTurn();
+    }else{
+      addBattleLog("💥 闪避失败！魔物击中了你。");
+      await resolveMonsterHit(true);
+    }
+  }
+}
+
+async function resolveMonsterHit(dodgeFailed){
+  if(!battle||battle.ended)return;
+  const m=battle.monster;
+  let dmg=rollDamage(m.attack);
+  const guard=battle.guardPower||0;
+  if(guard)dmg=Math.max(1,Math.floor(dmg*(1-guard)));
+  battle.playerHp=Math.max(0,battle.playerHp-dmg);
+  addBattleLog(`👾 魔物造成 ${dmg} 点伤害${guard?"（防御减伤）":""}。`);
+  battle.guardPower=0;
+  updateBattleUI();
+  if(battle.playerHp<=0){
+    await finishBattle(false);
+    return;
+  }
+  await endMonsterTurn();
+}
+
+async function endMonsterTurn(){
+  if(!battle||battle.ended)return;
+  battle.awaitingDodge=false;
+  battle.pendingDodge=null;
+  document.getElementById("dodgeModalBack").classList.remove("show");
+  battle.round++;
+  setBattleTurn("player");
+  updateBattleUI();
+}
+
+async function resolveDodge(playerDodges){
+  // 兼容旧按钮/旧代码调用；实际战斗使用新的四选一菜单。
+  await resolveMonsterResponse(playerDodges?"dodge":"run");
+}
+
+async function finishBattle(win){
+  if(!battle||battle.ended)return;
+  battle.ended=true;
+  battle.won=!!win;
+  battle.turn="end";
+  battle.awaitingDodge=false;
+  battle.awaitingSense=false;
+  document.getElementById("dodgeModalBack").classList.remove("show");
+  document.getElementById("senseModalBack").classList.remove("show");
+  document.getElementById("battleActions").style.display="none";
+
+  if(!win){
+    addBattleLog("💀 你被击倒了。此次狩猎失败。",true);
+    document.getElementById("battleResult").style.display="block";
+    document.getElementById("battleResult").textContent="狩猎失败\n消耗：1 AP（不返还）\n剩余 AP："+(currentAdventurer?.action_points??0);
+    await recordHunt(false,0);
+    updateBattleUI();
+    setTimeout(()=>closeBattleModal(),700);
+    return;
+  }
+
+  await unlockMonsterInBestiary(selectedMonster.id);
+  const rewardCoins=10+buildMonsterStats(selectedMonster,selectedMap).level*5;
+  const newCoins=Number(currentAdventurer?.coins||0)+rewardCoins;
+  const newScore=Number(currentAdventurer?.score||0)+10;
+  const {data}=await db.from("adventurers").update({coins:newCoins,score:newScore}).eq("user_id",currentUser.id).select().single();
+  if(data)currentAdventurer=data;
+  await recordHunt(true,10);
+  addBattleLog("🏆 魔物被击败！图鉴已记录。",true);
+  document.getElementById("battleResult").style.display="block";
+  document.getElementById("battleResult").textContent="🏆 狩猎成功！\n+10 分　💰 +"+rewardCoins+" 金币\n📖 已解锁图鉴："+monsterName(selectedMonster)+"\n\n🎁 接下来请进行掉落判定。";
+  updateBattleUI();
+  setTimeout(()=>openLootModal(),500);
+}
+
+function openLootModal(){
+  if(!selectedMonster)return;
+  document.getElementById("lootModalBack").classList.add("show");
+  document.getElementById("lootCloseBtn").style.display="none";
+  document.getElementById("lootReturnBtn").style.display="none";
+  document.getElementById("lootRollBtn").style.display="block";
+  document.getElementById("lootRollBtn").disabled=false;
+  document.getElementById("lootTitle").textContent="🏆 "+monsterName(selectedMonster)+" 已击败！";
+  document.getElementById("lootDesc").textContent="本次掉落 100% 获得素材。🎲 D20 点数越高，越容易拿到该魔物配置的稀有素材；骰子结果直接决定素材种类。";
+  document.getElementById("lootRollResult").textContent="🎲 尚未投掷掉落骰。";
+  document.getElementById("lootLog").innerHTML="";
+}
+
+async function rollLoot(){
+  if(!battle||!battle.ended||!battle.won||battle.lootFinished)return;
+  const btn=document.getElementById("lootRollBtn");
+  btn.disabled=true;
+  const drops=(selectedMonster?.drops||[]).filter(d=>d&&d.item_name);
+  const roll=d20();
+  const prof=Math.max(0,Number(currentAdventurer?.proficiency||0));
+  const profBonus=Math.floor(prof/2);
+  const coop=Math.max(0,battle.coopBonus||0);
+  let chosen=null;
+  if(drops.length===1)chosen=drops[0];
+  else if(drops.length>1){
+    const sorted=[...drops].sort((a,b)=>Number(a.drop_weight??0)-Number(b.drop_weight??0));
+    const index=Math.min(sorted.length-1,Math.floor((roll/20)*sorted.length));
+    chosen=sorted[index];
+  }
+  const tier=roll>=18?"✨ 极佳掉落":roll>=14?"🌟 稀有掉落":roll>=8?"🍖 良好掉落":"📦 普通掉落";
+  const lines=[`🎲 D20：${roll}`,`📈 熟练度修正：+${profBonus}`,`👥 队伍协作：+${coop}`,`⭐ 掉落判定：${tier}`,`🎯 骰子结果决定素材：${chosen?.item_name||"无"}`];
+  const obtained=[];
+  if(chosen){
+    const min=Math.max(1,Number(chosen.min_count??1)||1);
+    const max=Math.max(min,Number(chosen.max_count??min)||min);
+    const quantity=Math.floor(Math.random()*(max-min+1))+min;
+    const saved=await addInventoryItem(chosen.item_name,chosen.item_desc??"魔物掉落素材",quantity);
+    obtained.push(saved?`📦 ${chosen.item_name} ×${quantity}`:`📦 ${chosen.item_name} ×${quantity}（写入背包失败，请检查 inventory 表权限）`);
+  }else obtained.push("⚠️ 该魔物没有配置掉落素材。");
+  lines.push("\n🎁 获得：",...obtained,"\n⚡ 剩余 AP："+(currentAdventurer?.action_points??0));
+  document.getElementById("lootRollResult").textContent=lines.join("\n");
+  document.getElementById("lootLog").innerHTML=lines.map(x=>"<div>"+escapeHtml(x)+"</div>").join("");
+  battle.lootFinished=true;
+  document.getElementById("lootRollBtn").style.display="none";
+  document.getElementById("lootCloseBtn").style.display="block";
+  document.getElementById("lootReturnBtn").style.display="block";
+}
+
+function closeLootModal(){
+  document.getElementById("lootModalBack").classList.remove("show");
+  if(battle)document.getElementById("battleModalBack").classList.remove("show");
+  battle=null;
+  loadPanel();
+  refreshTeam();
+}
+
+async function unlockMonsterInBestiary(monsterId){
+  if(!currentAdventurer)return;
+  let unlocked=currentAdventurer.unlocked_monsters||[];
+  if(!Array.isArray(unlocked))unlocked=[];
+  if(!unlocked.includes(monsterId)){
+    unlocked.push(monsterId);
+    const {data}=await db.from("adventurers").update({unlocked_monsters:unlocked}).eq("user_id",currentUser.id).select().single();
+    if(data)currentAdventurer=data;
+  }
+}
+
+function closeBattleModal(){
+  // 战斗中不能靠右上角 X 直接退出；需要使用“逃跑”。
+  if(battle&&!battle.ended)return;
+  if(battle?.ended&&battle?.won&&!battle?.lootFinished&&selectedMonster){openLootModal();return;}
+  document.getElementById("battleModalBack").classList.remove("show");
+  if(!battle||battle.lootFinished||battle.escaped){battle=null;loadPanel();refreshTeam();}
+}
+
+function weightedPick(items){
+  const usable=items.filter(x=>Number(x.drop_weight??0)>0);
+  if(!usable.length)return items.length?items[Math.floor(Math.random()*items.length)]:null;
+  const total=usable.reduce((s,x)=>s+Number(x.drop_weight||0),0);
+  let r=Math.random()*total;
+  for(const item of usable){
+    r-=Number(item.drop_weight||0);
+    if(r<=0)return item;
+  }
+  return usable[usable.length-1];
+}
+
+async function recordHunt(success,score){try{await db.from("game_records").insert({user_id:currentUser.id,score:Number(score||0),level:Number(currentAdventurer?.level??1),correct_count:success?1:0,wrong_count:success?0:1})}catch(e){console.warn("game_records 写入失败",e)}}
+
+async function addInventoryItem(itemName,itemDesc,quantity){
+  try{
+    const qty=Math.max(1,Number(quantity)||1);
+    const {data:existing,error:readError}=await db.from("inventory")
+      .select("id,item_name,item_desc,item_count")
+      .eq("player_id",currentUser.id)
+      .eq("item_name",itemName)
+      .limit(1);
+    if(readError){console.error("读取 inventory 失败：",readError);return false;}
+    if(existing&&existing.length){
+      const item=existing[0];
+      const oldCount=Math.max(0,Number(item.item_count)||0);
+      const {error}=await db.from("inventory")
+        .update({item_count:oldCount+qty,item_desc:item.item_desc||itemDesc})
+        .eq("id",item.id)
+        .eq("player_id",currentUser.id);
+      if(error){console.error("更新 inventory 失败：",error);return false;}
+      return true;
+    }
+    const {error}=await db.from("inventory").insert({
+      player_id:currentUser.id,
+      item_name:itemName,
+      item_desc:itemDesc,
+      item_count:qty
+    });
+    if(error){console.error("新增 inventory 失败：",error);return false;}
+    return true;
+  }catch(e){
+    console.error("背包写入异常：",e);
+    return false;
+  }
+}
+function getItemCount(item){return Number(item.item_count ?? item.count ?? 0)}
+
+async function signin(){
+  const e=document.getElementById("signinMsg");
+  const {data,error}=await db.rpc("daily_signin");
+  if(error){e.textContent=error.message;e.className="err";return}
+  if(data===-1){e.textContent="今天已经签到过啦！";return}
+  e.textContent="签到成功！当前金币："+data;e.className="ok";
+  await loadAdventurer();
+}
+
+async function rest(){
+  const e=document.getElementById("restMsg");
+  const {data,error}=await db.rpc("rest_at_inn");
+  if(error){e.textContent=error.message;e.className="err";return}
+  if(data===-1){e.textContent="旅店冷却中，1小时后才能再次休息。";return}
+  e.textContent="休息成功！AP 已恢复到 "+data+"。";e.className="ok";
+  await loadAdventurer();
+}
+
+/* =============================================================
+   👑 GM 管理员后台设置功能逻辑
+   ============================================================= */
+function showAdminPane(name){
+  if(!isAdmin())return;
+  ["recipes","players","self","maps"].forEach(x=>{
+    const pane=document.getElementById("adminPane"+x.charAt(0).toUpperCase()+x.slice(1));
+    const tab=document.getElementById("adminTab"+x.charAt(0).toUpperCase()+x.slice(1));
+    if(pane)pane.classList.toggle("active",x===name);
+    if(tab)tab.classList.toggle("active",x===name);
+  });
+  if(name==="recipes")loadAdminRecipes();
+  if(name==="players")loadAdminPlayers();
+  if(name==="self")loadAdminSelfData();
+  if(name==="maps")loadAdminPlayerMaps(true);
+}
+
+async function loadAdminDashboard(){
+  if(!isAdmin()){
+    alert("非法访问：你没有管理员权限！");
+    showSection('main');
+    return;
+  }
+  await loadAdminPlayers();
+  await loadAdminRecipes();
+  await loadAdminSelfData();
+  await loadAdminPlayerMaps(true);
+  showAdminPane('recipes');
+}
+
+async function loadAdminPlayers(){
+  const selects=[document.getElementById("adminPlayerSelect"),document.getElementById("adminMapPlayerSelect")];
+  const {data,error}=await db.from("adventurers").select("*").order("name",{ascending:true});
+  if(error||!data){
+    selects.forEach(s=>{if(s)s.innerHTML="<option>获取玩家失败</option>";});
+    document.getElementById("adminPlayerMsg").textContent="读取玩家失败："+(error?.message||"未知错误");
+    return;
+  }
+  allAdventurersList=data;
+  const html=data.map(a=>`<option value="${a.user_id}">${escapeHtml(a.name||"无名冒险者")}（${a.user_id.slice(0,8)}…）</option>`).join("");
+  selects.forEach(s=>{if(s)s.innerHTML=html;});
+  onAdminSelectPlayer();
+}
+
+function fillAdminFields(prefix,p){
+  const map={name:"name",age:"age",gender:"gender",height:"height",race:"race",job:"job",technique:"technique",endurance:"endurance",taste:"taste",proficiency:"proficiency",smell:"smell",magic_sense:"magic_sense",ap:"action_points",max_ap:"max_action_points",coins:"coins",level:"level"};
+  Object.entries(map).forEach(([ui,key])=>{
+    const el=document.getElementById(prefix+ui);
+    if(el)el.value=p?.[key]??(ui==="max_ap"?5:ui==="level"?1:0);
+  });
+}
+
+function onAdminSelectPlayer(){
+  const uid=document.getElementById("adminPlayerSelect")?.value;
+  const p=allAdventurersList.find(x=>x.user_id===uid);
+  if(p)fillAdminFields("adm_",p);
+}
+
+function collectAdminFields(prefix){
+  return {
+    name:document.getElementById(prefix+"name")?.value.trim(),
+    age:Number(document.getElementById(prefix+"age")?.value),
+    gender:document.getElementById(prefix+"gender")?.value.trim(),
+    height:document.getElementById(prefix+"height")?.value.trim(),
+    race:document.getElementById(prefix+"race")?.value.trim(),
+    job:document.getElementById(prefix+"job")?.value.trim(),
+    technique:Number(document.getElementById(prefix+"technique")?.value||0),
+    endurance:Number(document.getElementById(prefix+"endurance")?.value||0),
+    taste:Number(document.getElementById(prefix+"taste")?.value||0),
+    proficiency:Number(document.getElementById(prefix+"proficiency")?.value||0),
+    smell:Number(document.getElementById(prefix+"smell")?.value||0),
+    magic_sense:Number(document.getElementById(prefix+"magic_sense")?.value||0),
+    action_points:Number(document.getElementById(prefix+"ap")?.value||0),
+    max_action_points:Number(document.getElementById(prefix+"max_ap")?.value||5),
+    coins:Number(document.getElementById(prefix+"coins")?.value||0),
+    level:Number(document.getElementById(prefix+"level")?.value||1)
+  };
+}
+
+async function saveAdminPlayerData(){
+  if(!isAdmin())return;
+  const uid=document.getElementById("adminPlayerSelect").value;
+  const msgEl=document.getElementById("adminPlayerMsg");
+  const updates=collectAdminFields("adm_");
+  if(!updates.name){msgEl.textContent="角色名字不能为空。";msgEl.className="err";return;}
+  const {data,error}=await db.from("adventurers").update(updates).eq("user_id",uid).select().single();
+  if(error){msgEl.textContent="保存失败："+error.message;msgEl.className="err";return;}
+  msgEl.textContent="✅ 玩家数据已保存。";msgEl.className="ok";
+  allAdventurersList=allAdventurersList.map(x=>x.user_id===uid?data:x);
+  if(uid===currentUser.id){currentAdventurer=data;await loadPanel();}
+}
+
+async function grantInfiniteAP(){
+  document.getElementById("adm_ap").value=9999;
+  document.getElementById("adm_max_ap").value=9999;
+  await saveAdminPlayerData();
+}
+
+async function loadAdminSelfData(){
+  if(!isAdmin()||!currentUser)return;
+  let p=currentAdventurer;
+  if(!p || p.user_id!==currentUser.id){
+    const {data}=await db.from("adventurers").select("*").eq("user_id",currentUser.id).maybeSingle();
+    if(data){p=data;currentAdventurer=data;}
+  }
+  if(!p){document.getElementById("adminSelfMsg").textContent="你还没有冒险者角色，请先创建角色。";return;}
+  fillAdminFields("self_",p);
+  document.getElementById("adminSelfMsg").textContent="已读取当前 GM 角色："+(p.name||"无名冒险者");
+}
+
+async function saveAdminSelfData(){
+  if(!isAdmin()||!currentUser)return;
+  const msg=document.getElementById("adminSelfMsg");
+  const updates=collectAdminFields("self_");
+  const {data,error}=await db.from("adventurers").update(updates).eq("user_id",currentUser.id).select().single();
+  if(error){msg.textContent="保存失败："+error.message;msg.className="err";return;}
+  currentAdventurer=data;
+  msg.textContent="✅ 我的 GM 数据已保存。";msg.className="ok";
+  await loadPanel();
+}
+
+async function setSelfInfiniteAP(){
+  document.getElementById("self_ap").value=9999;
+  document.getElementById("self_max_ap").value=9999;
+  await saveAdminSelfData();
+}
+
+async function loadAdminRecipes(){
+  const box=document.getElementById("adminRecipeList");
+  if(!box)return;
+  box.innerHTML="<p class='muted'>读取料理提交中……</p>";
+  const {data,error}=await db.from("recipe_submissions").select("*").order("created_at",{ascending:false});
+  if(error){box.innerHTML=`<p class='err'>读取失败：${escapeHtml(error.message)}</p>`;return;}
+  if(!data?.length){box.innerHTML="<p class='muted'>目前暂无料理提交记录。</p>";return;}
+  box.innerHTML=data.map(r=>{
+    const pending=r.status==="pending";
+    const requested=r.requested_map_name||"未指定";
+    return `<div class="adminRecipeCard ${pending?'pending':''}">
+      <div class="row" style="justify-content:space-between">
+        <b>🍳 ${escapeHtml(r.recipe_name||"未命名料理")}</b>
+        <span class="badge ${r.status==='approved'?'ok':r.status==='rejected'?'err':''}">${r.status==='approved'?'✅ 已通过':r.status==='rejected'?'❌ 已拒绝':'⏳ 待审核'}</span>
+      </div>
+      <div class="adminStat">提交者：${escapeHtml(r.author_name||"未知玩家")}</div>
+      <div class="adminStat">申请解锁：<b>${escapeHtml(requested)}</b></div>
+      <p>${escapeHtml(r.recipe_desc||r.description||"暂无描述")}</p>
+      ${pending?`<div class="row">
+        <button class="primary" onclick="approveRecipe('${escapeJs(r.id)}')">✅ 审核通过并解锁该玩家地图</button>
+        <button class="danger" onclick="rejectRecipe('${escapeJs(r.id)}')">❌ 驳回</button>
+      </div>`:`<p class="small muted">${r.status==='approved'?'已审核并处理地图权限。':'该提交已结束审核。'}</p>`}
+    </div>`;
+  }).join("");
+}
+
+async function approveRecipe(recipeId){
+  if(!isAdmin())return;
+  const recipe=(await db.from("recipe_submissions").select("*").eq("id",recipeId).single()).data;
+  if(!recipe){alert("找不到这条料理提交。");return;}
+  const mapToUnlock=recipe.requested_map_name;
+  if(!mapToUnlock){alert("这条料理没有指定申请解锁地图，无法自动解锁。");return;}
+  if(!confirm(`确定通过「${recipe.recipe_name}」并给玩家「${recipe.author_name||"未知玩家"}」解锁「${mapToUnlock}」吗？`))return;
+  const {error:updateError}=await db.from("recipe_submissions").update({status:"approved",unlocked_map_name:mapToUnlock,reviewed_by:currentUser.id,reviewed_at:new Date().toISOString()}).eq("id",recipeId);
+  if(updateError){alert("审核保存失败："+updateError.message);return;}
+  const {error:mapError}=await db.from("player_unlocked_maps").upsert({user_id:recipe.user_id,map_name:mapToUnlock,unlocked_by_recipe:recipeId,unlocked_by:currentUser.id},{onConflict:"user_id,map_name"});
+  if(mapError){alert("料理已通过，但地图解锁失败："+mapError.message);await loadAdminRecipes();return;}
+  alert(`审核通过！已给「${recipe.author_name||"该玩家"}」解锁：${mapToUnlock}`);
+  await loadAdminRecipes();
+}
+
+async function rejectRecipe(recipeId){
+  if(!isAdmin())return;
+  const reason=prompt("可以填写驳回原因（可留空）：","");
+  const {error}=await db.from("recipe_submissions").update({status:"rejected",reviewed_by:currentUser.id,reviewed_at:new Date().toISOString()}).eq("id",recipeId);
+  if(error){alert("驳回失败："+error.message);return;}
+  await loadAdminRecipes();
+}
+
+async function loadAdminPlayerMaps(initial=false){
+  if(!isAdmin())return;
+  const select=document.getElementById("adminMapPlayerSelect");
+  if(!select)return;
+  if(initial && !select.options.length)await loadAdminPlayers();
+  const uid=select.value||currentUser?.id;
+  if(uid)select.value=uid;
+  const box=document.getElementById("adminPlayerMaps");
+  if(!box)return;
+  const {data,error}=await db.from("player_unlocked_maps").select("*").eq("user_id",uid).order("map_name");
+  if(error){box.innerHTML=`<p class='err'>读取地图权限失败：${escapeHtml(error.message)}</p>`;return;}
+  const unlocked=new Set((data||[]).map(x=>x.map_name));
+  const {data:allMaps}=await db.from("game_regions").select("*").order("id",{ascending:true});
+  let mapsForAdmin=allMaps||[];
+  if(!mapsForAdmin.length)mapsForAdmin=[{name:"美食镇"},{name:"雨林"},{name:"烈焰火山"},{name:"深海冰洞"}];
+  const extra=mapsForAdmin.filter(m=>!DEFAULT_UNLOCKED_MAPS.includes(mapName(m)));
+  box.innerHTML=`<div class="small muted">已解锁额外地图：</div>`+
+    (data?.length?data.map(x=>`<span class="stat">🗺️ ${escapeHtml(x.map_name)}</span>`).join(""):"<p class='muted'>暂无额外解锁（美食镇、雨林属于默认开放）。</p>")+
+    `<hr><div class="small muted">手动给该玩家解锁：</div>`+
+    extra.map(m=>{const n=mapName(m);return `<div class="row" style="margin-top:8px;justify-content:space-between"><span>${escapeHtml(m.icon||"🗺️")} ${escapeHtml(n)}</span><button class="secondary" ${unlocked.has(n)?'disabled':''} onclick="grantPlayerMap('${escapeJs(uid)}','${escapeJs(n)}')">${unlocked.has(n)?'已解锁':'🔓 解锁给该玩家'}</button></div>`}).join("");
+}
+
+async function grantPlayerMap(uid,mapNameValue){
+  if(!isAdmin())return;
+  if(!uid||!mapNameValue)return;
+  if(!confirm(`确定给该玩家解锁「${mapNameValue}」吗？`))return;
+  const {error}=await db.from("player_unlocked_maps").upsert({user_id:uid,map_name:mapNameValue,unlocked_by:currentUser.id},{onConflict:"user_id,map_name"});
+  if(error){alert("解锁失败："+error.message);return;}
+  alert("地图解锁成功："+mapNameValue);
+  await loadAdminPlayerMaps();
+}
+
+async function loadRecipeMapOptions(){
+  const sel=document.getElementById("recipeMapRequest");
+  if(!sel)return;
+  const {data}=await db.from("game_regions").select("*").order("id",{ascending:true});
+  let list=data||[];
+  if(!list.length)list=[{name:"美食镇"},{name:"雨林"},{name:"烈焰火山"},{name:"深海冰洞"}];
+  const available=list.filter(m=>!DEFAULT_UNLOCKED_MAPS.includes(mapName(m)));
+  sel.innerHTML=available.length ? available.map(m=>`<option value="${escapeHtml(mapName(m))}">${escapeHtml(m.icon||"🗺️")} ${escapeHtml(mapName(m))}</option>`).join("") : `<option value="">目前没有可申请地图</option>`;
+}
+
+const FOOD_BUFF_POOL=[["料理效果 001","食用后短时间伤口愈合速度+15%，但皮肤会散发淡淡的生肉气息","食用后生效的特殊料理效果。"],["料理效果 002","味觉钝化30分钟，吃什么都觉得香甜，苦味完全消失","食用后生效的特殊料理效果。"],["料理效果 003","接下来2小时移动负重减少20%，走路脚步轻盈","食用后生效的特殊料理效果。"],["料理效果 004","临时获得一层微弱魔物角质，抵御一次轻微磕碰","食用后生效的特殊料理效果。"],["料理效果 005","呼出气息带薄雾，不容易被远距离察觉，持续40分钟","食用后生效的特殊料理效果。"],["料理效果 006","饱腹感翻倍，一小口就饱，但是会馋同类型魔物食材","食用后生效的特殊料理效果。"],["料理效果 007","弱光视力提升，暗处视物清晰，强光会短暂刺眼","食用后生效的特殊料理效果。"],["料理效果 008","体温小幅提升，耐寒+25%，容易微微出汗","食用后生效的特殊料理效果。"],["料理效果 009","反应速度小幅提升，抬手动作更快，持续1小时","食用后生效的特殊料理效果。"],["料理效果 010","对轻度毒素抗性+10%，无法抵抗剧毒","食用后生效的特殊料理效果。"],["料理效果 011","憋气时长提升一倍，上岸后容易短暂耳鸣","食用后生效的特殊料理效果。"],["料理效果 012","指尖会长出细小嫩芽，12小时后自动脱落，无伤害","食用后生效的特殊料理效果。"],["料理效果 013","附近有敌意生物时胃部轻微发麻预警","食用后生效的特殊料理效果。"],["料理效果 014","今晚做梦会看到食材原生魔物的记忆碎片","食用后生效的特殊料理效果。"],["料理效果 015","短时间肠胃耐受力提升，不容易吃坏肚子","食用后生效的特殊料理效果。"],["料理效果 016","说话音量不自觉放大，呐喊声更洪亮，持续1小时","食用后生效的特殊料理效果。"],["料理效果 017","站在沙地、泥地不容易打滑下陷","食用后生效的特殊料理效果。"],["料理效果 018","自身魔力/气息波动减弱，难以被感知侦测","食用后生效的特殊料理效果。"],["料理效果 019","吃下这道菜，接下来6小时食欲降低","食用后生效的特殊料理效果。"],["料理效果 020","皮肤浮现转瞬即逝的微光鳞片，遇水更明显","食用后生效的特殊料理效果。"],["料理效果 021","下坡跑步速度小幅增加，上坡容易乏力","食用后生效的特殊料理效果。"],["料理效果 022","品尝料理时，短暂看见很久以前吃过这道菜的人的画面","食用后生效的特殊料理效果。"],["料理效果 023","骨骼韧性小幅提升，降低扭伤概率","食用后生效的特殊料理效果。"],["料理效果 024","所有酸味食物尝起来都是蜂蜜甜口","食用后生效的特殊料理效果。"],["料理效果 025","身上异味、汗味被掩盖，替换成料理香气","食用后生效的特殊料理效果。"],["料理效果 026","细小划痕、擦伤会缓慢结痂愈合","食用后生效的特殊料理效果。"],["料理效果 027","从较低高度坠落，冲击力减少","食用后生效的特殊料理效果。"],["料理效果 028","能隐约感知附近金属矿石的大致方向","食用后生效的特殊料理效果。"],["料理效果 029","食用后偶尔听见遥远魔物低鸣，无实际威胁","食用后生效的特殊料理效果。"],["料理效果 030","肌肉耐力提升，不容易手臂腿发酸","食用后生效的特殊料理效果。"],["料理效果 031","身体水分调节变强，短暂减轻水肿","食用后生效的特殊料理效果。"],["料理效果 032","受到抓挠攻击时，皮肤弹出一瞬微小刺尖","食用后生效的特殊料理效果。"],["料理效果 033","情绪更加平稳，不容易暴怒慌张","食用后生效的特殊料理效果。"],["料理效果 034","弹跳高度小幅提升，落地震动变大","食用后生效的特殊料理效果。"],["料理效果 035","皮肤锁水，干燥环境不会快速干裂","食用后生效的特殊料理效果。"],["料理效果 036","能感知到方圆百米内可食用生物的大致位置","食用后生效的特殊料理效果。"],["料理效果 037","短时间抵御巨响带来的耳震眩晕","食用后生效的特殊料理效果。"],["料理效果 038","指尖可以搓出一点不会烧人的淡蓝微光","食用后生效的特殊料理效果。"],["料理效果 039","今晚睡眠质量提升，休息恢复效率+20%","食用后生效的特殊料理效果。"],["料理效果 040","钝击伤害轻微降低，但是身体会变得有点迟钝","食用后生效的特殊料理效果。"],["料理效果 041","快速找到附近水源，分辨能不能饮用","食用后生效的特殊料理效果。"],["料理效果 042","慢速移动时隐蔽性变强，奔跑效果消失","食用后生效的特殊料理效果。"],["料理效果 043","弱酸接触皮肤不会快速灼伤","食用后生效的特殊料理效果。"],["料理效果 044","嗅觉大幅提升，气味分辨更敏锐，异味会格外刺鼻","食用后生效的特殊料理效果。"],["料理效果 045","情绪紧张时，周身飘出淡淡的迷惑轻烟","食用后生效的特殊料理效果。"],["料理效果 046","缓解肢体僵硬，久坐久站酸痛减轻","食用后生效的特殊料理效果。"],["料理效果 047","这一餐的热量缓慢释放，长时间不饿","食用后生效的特殊料理效果。"],["料理效果 048","短暂提升抗寒能力，不怕低温，怕滚烫热源","食用后生效的特殊料理效果。"],["料理效果 049","小声说话可以让远处一人清晰听见","食用后生效的特殊料理效果。"],["料理效果 050","体表灰尘污垢会慢慢自行脱落","食用后生效的特殊料理效果。"],["料理效果 051","徒手抓握物体摩擦力增强，不容易脱手","食用后生效的特殊料理效果。"],["料理效果 052","掌心持续带着柔和暖意","食用后生效的特殊料理效果。"],["料理效果 053","微弱瘴气无法侵入身体","食用后生效的特殊料理效果。"],["料理效果 054","可以把嘴里的味道短暂转移给另一个人","食用后生效的特殊料理效果。"],["料理效果 055","运动时耐力提升，结束后更容易疲惫","食用后生效的特殊料理效果。"],["料理效果 056","站在地面时，心神更稳定，不容易被击退","食用后生效的特殊料理效果。"],["料理效果 057","能听懂小型魔物昆虫简单情绪，无法对话","食用后生效的特殊料理效果。"],["料理效果 058","在水里游动阻力变小","食用后生效的特殊料理效果。"],["料理效果 059","偶尔听到食材魔物的零碎低语，大多是碎片记忆","食用后生效的特殊料理效果。"],["料理效果 060","轻微疼痛感减弱，受伤感知变迟钝","食用后生效的特殊料理效果。"],["料理效果 061","抛出细小藤蔓丝，可轻轻拉扯轻小物品","食用后生效的特殊料理效果。"],["料理效果 062","小火苗、高温热气不容易烫伤皮肤","食用后生效的特殊料理效果。"],["料理效果 063","身上穿戴装备重量感知降低","食用后生效的特殊料理效果。"],["料理效果 064","吃过这道菜，未来一年随时可以回忆起它的味道","食用后生效的特殊料理效果。"],["料理效果 065","在沙土环境，脚印会快速淡化消失","食用后生效的特殊料理效果。"],["料理效果 066","能感知微弱魔力流动","食用后生效的特殊料理效果。"],["料理效果 067","进食后进入安定状态，心率放缓","食用后生效的特殊料理效果。"],["料理效果 068","远距离声音听得更清楚，噪音更容易烦扰你","食用后生效的特殊料理效果。"],["料理效果 069","指尖可以凝结一层薄晶，敲硬物不容易破皮","食用后生效的特殊料理效果。"],["料理效果 070","预判野兽、魔物简单攻击动作","食用后生效的特殊料理效果。"],["料理效果 071","踩泥泞地面不容易陷进去","食用后生效的特殊料理效果。"],["料理效果 072","低智魔物对你好感小幅上升","食用后生效的特殊料理效果。"],["料理效果 073","骨骼震动提醒你即将到来的危险","食用后生效的特殊料理效果。"],["料理效果 074","下落速度轻微放缓","食用后生效的特殊料理效果。"],["料理效果 075","入口食物如果含毒素，舌尖会发麻提醒","食用后生效的特殊料理效果。"],["料理效果 076","哪怕湿身，身体也不容易失温","食用后生效的特殊料理效果。"],["料理效果 077","光线昏暗时影子会微微拉长、自主晃动","食用后生效的特殊料理效果。"],["料理效果 078","短时间爆发力提升，持续结束后乏力","食用后生效的特殊料理效果。"],["料理效果 079","在草丛苔藓区域，气息更难被侦测","食用后生效的特殊料理效果。"],["料理效果 080","呼出空气带着淡淡的料理甜香","食用后生效的特殊料理效果。"],["料理效果 081","手肘膝盖皮肤临时变坚韧，磕碰不痛","食用后生效的特殊料理效果。"],["料理效果 082","加速代谢体内多余杂质","食用后生效的特殊料理效果。"],["料理效果 083","从水里上岸，身上水分快速风干","食用后生效的特殊料理效果。"],["料理效果 084","不容易被幻术轻易扰乱心智","食用后生效的特殊料理效果。"],["料理效果 085","更容易看穿简单幻象伪装","食用后生效的特殊料理效果。"],["料理效果 086","跺脚发出低频震动，吓跑弱小魔物","食用后生效的特殊料理效果。"],["料理效果 087","胃黏膜获得短暂保护，刺激食物不易反胃","食用后生效的特殊料理效果。"],["料理效果 088","入梦时进入平静星海幻境","食用后生效的特殊料理效果。"],["料理效果 089","攀爬岩壁摩擦力增加","食用后生效的特殊料理效果。"],["料理效果 090","敌人很难锁定你的位置，强光下失效","食用后生效的特殊料理效果。"],["料理效果 091","低温环境保护心脏稳定","食用后生效的特殊料理效果。"],["料理效果 092","料理香气可以安抚躁动的小动物/魔物","食用后生效的特殊料理效果。"],["料理效果 093","皮肤短时间更有韧性，不容易被割破小口","食用后生效的特殊料理效果。"],["料理效果 094","记住一种气味后，可以远距离追踪","食用后生效的特殊料理效果。"],["料理效果 095","呼吸声音变小，潜行更安静","食用后生效的特殊料理效果。"],["料理效果 096","短时间耐受温热，怕骤冷刺激","食用后生效的特殊料理效果。"],["料理效果 097","表皮微小破损加速修复","食用后生效的特殊料理效果。"],["料理效果 098","顺风跑步效率提升","食用后生效的特殊料理效果。"],["料理效果 099","轮廓在远处看会轻微模糊，难以精准瞄准","食用后生效的特殊料理效果。"],["料理效果 100","吃下之后，下一次品尝任意魔物料理，额外触发一条随机小buff","食用后生效的特殊料理效果。"]];
+function townOpen(type){const box=document.getElementById('townContent');if(!box)return;const d={shop:'<h3>🛒 商店</h3><p>这里以后可以购买冒险补给、料理素材和特殊道具。</p>',npc:'<h3>🧑‍🍳 NPC</h3><div class="stat">🍳 镇长：欢迎来到美食镇！</div><div class="stat">🧑‍🍳 厨师：听说雨林里最近出现了稀有素材。</div>',guild:'<h3>🛡️ 冒险者公会</h3><p>当前暂时没有正式任务，可以办理冒险者相关事务。</p><div class="stat">🏅 冒险者公会徽章：美食镇入会纪念</div>',inn:'<h3>🛏️ 客栈</h3><p>在客栈休息可以恢复行动点。</p><button class="primary" onclick="rest()">休息并恢复到最大 AP</button>'};box.innerHTML=d[type]||d.shop;}
+function drawFoodBuff(){const b=FOOD_BUFF_POOL[Math.floor(Math.random()*FOOD_BUFF_POOL.length)];document.getElementById('drawBuffResult').innerHTML='<b>🎉 抽到了：'+escapeHtml(b[0])+'</b><br>'+escapeHtml(b[1])+'<br><span class="small muted">'+escapeHtml(b[2])+'</span>';}
+function buffKey(){return currentUser?'mystery_recipe_buffs_'+currentUser.id:'mystery_recipe_buffs_guest';}
+function getCustomBuffs(){try{return JSON.parse(localStorage.getItem(buffKey())||'[]')}catch(e){return [];}}
+function saveCustomBuff(){const dish=document.getElementById('customBuffDish').value.trim(),name=document.getElementById('customBuffName').value.trim(),desc=document.getElementById('customBuffDesc').value.trim(),msg=document.getElementById('customBuffMsg');if(!dish||!name||!desc){msg.textContent='请把料理名称、Buff 名称和效果填写完整。';return;}const list=getCustomBuffs();list.unshift({dish,name,desc,created_at:new Date().toISOString()});localStorage.setItem(buffKey(),JSON.stringify(list));document.getElementById('customBuffDish').value='';document.getElementById('customBuffName').value='';document.getElementById('customBuffDesc').value='';msg.textContent='保存成功！';renderCustomBuffs();}
+function renderCustomBuffs(){const box=document.getElementById('myBuffList');if(!box)return;const list=getCustomBuffs();box.innerHTML=list.length?list.map((b,i)=>'<div class="inventoryItem"><b>🍳 '+escapeHtml(b.dish)+'</b><br><strong>'+escapeHtml(b.name)+'</strong><br><span class="muted">'+escapeHtml(b.desc)+'</span><br><button class="danger" onclick="deleteCustomBuff('+i+')">删除</button></div>').join(''):'<p class="muted">暂无自定义 Buff。</p>';}
+function deleteCustomBuff(i){const list=getCustomBuffs();list.splice(i,1);localStorage.setItem(buffKey(),JSON.stringify(list));renderCustomBuffs();}
+
+function escapeHtml(v){
+  return String(v??"").replace(/[&<>"']/g,c=>({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[c]));
+}
+function escapeJs(v){ return String(v??"").replace(/\\/g,"\\\\").replace(/'/g,"\\'"); }
+
+// 监听 Auth 登录事件
+db.auth.onAuthStateChange((event, session)=>{
+  if(event === "SIGNED_IN" && session?.user){
+    currentUser=session.user;
+    setTimeout(()=>{
+      if(!gameLoading && currentUser?.id===session.user.id){
+        loadGame(session.user);
+      }
+    },0);
+  }else if(event === "SIGNED_OUT"){
+    showLogin();
+  }
+});
+
+// 初始化
+(async function initAuth(){
+  try{
+    const {data,error}=await db.auth.getSession();
+    if(error){ showLogin("登录状态读取失败，请重新登录。"); return; }
+    if(data?.session?.user){
+      currentUser=data.session.user;
+      await loadGame(data.session.user);
+    }else{
+      showLogin();
+    }
+  }catch(e){
+    showLogin("请登录后继续。");
+  }
+})();
+
+// 管理员权限检查：与 refreshAdminStatus 保持一致，不依赖 admins.role 字段。
+async function checkAdmin() {
+  const ok=await refreshAdminStatus();
+  if(!ok) alert("没有管理员权限");
+  return ok;
+}
+</script>
+</body>
+</html>
