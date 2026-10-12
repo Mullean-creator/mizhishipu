@@ -192,20 +192,20 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
       <div class="card">
         <h2>🗺️ 冒险地图</h2>
         <p id="huntStatus" class="muted">正在读取地图……</p>
-        <p class="small muted">提示：初始开放【美食镇】和【雨林】，其他地图需要玩家提交料理并由 GM 审核解锁！</p>
+        <p class="small muted">提示：初始开放【美食镇】和【幽毒雨林】，其他地图需要玩家提交料理并由管理员审核解锁！</p>
         <div id="maps"></div>
       </div>
     </div>
 
-    <!-- 7. GM 管理员专属后台 -->
+    <!-- 7. 管理员专属后台 -->
     <div id="adminSection" class="section">
       <div class="card" style="border:2px solid #b3261e;">
-        <h2>👑 GM 管理员控制台</h2>
-        <p class="muted">独立的 GM 工作区：审核料理、给指定玩家解锁地图、修改玩家数据，以及管理自己的 GM 角色数据。</p>
+        <h2>👑 管理员控制台</h2>
+        <p class="muted">独立的  工作区：审核料理、给指定玩家解锁地图、修改玩家数据，以及管理自己的  角色数据。</p>
         <div class="adminTabs">
           <button id="adminTabRecipes" class="adminTab active" onclick="showAdminPane('recipes')">🍳 料理审核</button>
           <button id="adminTabPlayers" class="adminTab" onclick="showAdminPane('players')">👥 玩家管理</button>
-          <button id="adminTabSelf" class="adminTab" onclick="showAdminPane('self')">👑 我的 GM 数据</button>
+          <button id="adminTabSelf" class="adminTab" onclick="showAdminPane('self')">👑 我的 管理员 数据</button>
           <button id="adminTabMaps" class="adminTab" onclick="showAdminPane('maps')">🗺️ 地图管理</button>
         </div>
       </div>
@@ -256,8 +256,8 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
 
       <div id="adminPaneSelf" class="adminPane">
         <div class="card">
-          <h3>👑 我的 GM 角色数据</h3>
-          <p class="muted">这是当前登录 GM 自己的角色资料，不需要在玩家列表里寻找自己。</p>
+          <h3>👑 我的 管理员角色数据</h3>
+          <p class="muted">这是当前登录 管理员自己的角色资料，不需要在玩家列表里寻找自己。</p>
           <div class="grid">
             <div><label>角色名字：</label><input id="self_name" type="text"></div>
             <div><label>年龄：</label><input id="self_age" type="number" min="1"></div>
@@ -278,7 +278,7 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
           </div>
           <br>
           <div class="row">
-            <button class="primary" onclick="saveAdminSelfData()">💾 保存我的 GM 数据</button>
+            <button class="primary" onclick="saveAdminSelfData()">💾 保存我的 管理员 数据</button>
             <button class="secondary" onclick="setSelfInfiniteAP()">⚡ 我的 AP 设为 9999</button>
             <button class="secondary" onclick="loadAdminSelfData()">🔄 重新读取</button>
           </div>
@@ -315,8 +315,8 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
   <button id="navBuff" class="navbtn" onclick="showSection('buff')">🍲 美食 Buff</button>
   <button id="navRecipe" class="navbtn" onclick="showSection('recipe')">🍳 提交料理</button>
 
-  <!-- GM管理员后台入口，仅授权账号可见 -->
-  <button id="navAdmin" class="navbtn adminNav" style="display:none;" onclick="showSection('admin')">👑 GM后台设置</button>
+  <!-- 管理员后台入口，仅授权账号可见 -->
+  <button id="navAdmin" class="navbtn adminNav" style="display:none;" onclick="showSection('admin')">👑 后台设置</button>
 
   <hr>
   <button class="navbtn" onclick="closeSide()">✕ 关闭菜单</button>
@@ -465,20 +465,12 @@ const SUPABASE_KEY="sb_publishable_0FU46ikX3BapZYxXDRVKrA_K5jLe2K0";
 const db=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 
 /* -------------------------------------------------------------
-   👑 管理员邮箱配置 (在此填入允许开启 GM 后台的账号邮箱)
+   👑 管理员邮箱配置 (在此填入允许开启 管理员 后台的账号邮箱)
    ------------------------------------------------------------- */
 const ADMIN_EMAILS = []; // 管理员现在由 Supabase 的 admins 表控制；此数组仅保留兼容，不再用于授权。
 
-/* -------------------------------------------------------------
-   👾 预设怪物库 (后续你可以在这里自由替换/扩展怪物名字与掉落)
-   ------------------------------------------------------------- */
-const PRESET_MONSTERS = [
-  { id: "m1", name: "暴食史莱姆", icon: "🟢", desc: "胶质形态的弱小魔物，最爱抢食掉落的碎屑。", level: 1, hp: 50, atk: 8, def: 2, drops: [{item_name:"透明黏液", item_desc:"浓稠的史莱姆分泌物，具有特殊的勾芡效果", min_count:1, max_count:3, drop_weight:80}] },
-  { id: "m2", name: "走地炸鸡鸟", icon: "🐓", desc: "羽毛带有油脂香气的怪鸟，受惊时会喷出微热火苗。", level: 2, hp: 75, atk: 12, def: 4, drops: [{item_name:"香脆鸟翅", item_desc:"多汁的肉质素材，富含油脂", min_count:1, max_count:2, drop_weight:70}, {item_name:"炸鸡羽毛", item_desc:"带有焦香味的羽毛", min_count:1, max_count:2, drop_weight:50}] },
-  { id: "m3", name: "狂暴野猪", icon: "🐗", desc: "雨林深处极具攻击性的野兽，肉质极为鲜美。", level: 3, hp: 110, atk: 18, def: 7, drops: [{item_name:"上等野猪肉", item_desc:"沉甸甸的鲜红肉块，烹饪佳品", min_count:1, max_count:2, drop_weight:60}, {item_name:"硬质猪獠牙", item_desc:"坚硬的獠牙素材", min_count:1, max_count:1, drop_weight:40}] },
-  { id: "m4", name: "椒盐巨型蝎", icon: "🦂", desc: "尾刺带有椒盐麻味的外壳魔物。", level: 4, hp: 140, atk: 22, def: 12, drops: [{item_name:"脆皮蝎尾", item_desc:"极具风味的甲壳素材，带天然麻辣味", min_count:1, max_count:2, drop_weight:50}] },
-  { id: "m5", name: "深海大章鱼", icon: "🐙", desc: "隐藏在水域深处的巨大软体魔物。", level: 5, hp: 200, atk: 28, def: 10, drops: [{item_name:"柔韧触手", item_desc:"弹性十足的鲜嫩肉质", min_count:2, max_count:4, drop_weight:50}] }
-];
+/* 旧版预设魔物已停用；魔物统一从 Supabase monsters 表读取。 */
+const PRESET_MONSTERS = [];
 
 let currentUser=null;
 let currentAdventurer=null;
@@ -486,7 +478,7 @@ let maps=[];
 let monsters=[];
 let selectedMap=null;
 let selectedMonster=null;
-let allAdventurersList=[]; // 管理员GM控制台用
+let allAdventurersList=[]; // 管理员控制台用
 let currentIsAdmin=false;
 let currentAdminRole=null;
 
@@ -635,7 +627,7 @@ async function loadGame(userArg=null){
     document.getElementById("who").textContent="👋 "+nickname;
     document.getElementById("sideName").textContent="当前玩家："+nickname;
 
-    // GM判断与界面显示
+    // 管理员判断与界面显示
     const adminNavBtn = document.getElementById("navAdmin");
     if(isAdmin()){
       adminNavBtn.style.display="block";
@@ -797,33 +789,26 @@ async function loadInventory(){
 async function loadBestiary(){
   const listEl = document.getElementById("bestiaryList");
   listEl.innerHTML = "<p class='muted'>读取图鉴中……</p>";
-
   const unlocked = currentAdventurer?.unlocked_monsters || [];
-
-  listEl.innerHTML = PRESET_MONSTERS.map(m => {
-    const isUnlocked = unlocked.includes(m.id) || unlocked.includes(m.name);
-    if(isUnlocked){
-      return `
-        <div class="bestiaryCard">
-          <span class="badge ok">✦ 已解锁档案</span>
-          <b>${m.icon} ${escapeHtml(m.name)} (Lv.${m.level})</b>
-          <p>${escapeHtml(m.desc)}</p>
-          <div class="small muted">
-            ❤️ HP: ${m.hp} | ⚔️ 攻击: ${m.atk} | 🛡️ 防御: ${m.def}<br>
-            🎁 掉落物: ${m.drops.map(d=>d.item_name).join("、")}
-          </div>
-        </div>`;
-    }else{
-      return `
-        <div class="bestiaryCard locked">
-          <span class="badge locked">🔒 未击败</span>
-          <b>❓ ？？？？？？</b>
-          <p class="muted">在战斗中成功击败该魔物后可解锁档案与详细信息。</p>
-        </div>`;
-    }
+  const {data: rows, error} = await db.from("monsters").select("*").order("region_id", {ascending:true}).order("id", {ascending:true});
+  if(error){
+    listEl.innerHTML = `<p class="err">读取魔物图鉴失败：${escapeHtml(error.message)}</p>`;
+    return;
+  }
+  if(!rows || !rows.length){
+    listEl.innerHTML = "<p class='muted'>魔物图鉴暂时为空，等待 管理员 配置地区魔物。</p>";
+    return;
+  }
+  const ids=rows.map(m=>m.id);
+  const {data:drops}=await db.from("monster_drops").select("monster_id,item_name,item_desc,min_count,max_count,is_rare").in("monster_id",ids);
+  const regionNames={1:"美食镇",2:"幽毒雨林",3:"獠牙原野",4:"炎狱山岭",5:"霜牙荒原",6:"魔潮深海"};
+  listEl.innerHTML=rows.map(m=>{
+    const isUnlocked=unlocked.includes(m.id)||unlocked.includes(String(m.id))||unlocked.includes(m.monster_name);
+    const items=(drops||[]).filter(d=>Number(d.monster_id)===Number(m.id));
+    if(!isUnlocked) return `<div class="bestiaryCard locked"><span class="badge locked">🔒 未击败</span><b>❓ ？？？？？？</b><p class="muted">地区：${escapeHtml(regionNames[m.region_id]||("地区 #"+m.region_id))}。成功击败后可解锁档案。</p></div>`;
+    return `<div class="bestiaryCard"><span class="badge ok">✦ 已解锁档案</span><b>👾 ${escapeHtml(m.monster_name)} · ${escapeHtml(regionNames[m.region_id]||("地区 #"+m.region_id))}</b><p>${escapeHtml(m.description||"暂无魔物说明")}</p><div class="small muted">魔力等级：${Number(m.magic_level||0)} | 难度：${Number(m.difficulty||1)}<br>🎁 掉落物：${items.length?items.map(d=>escapeHtml(d.item_name)).join("、"):"暂无配置"}</div></div>`;
   }).join("");
 }
-
 /* =========================
    🍳 料理提交与查看
    ========================= */
@@ -897,7 +882,7 @@ function stopTeamRefresh(){
 }
 
 // 默认开放的地图
-const DEFAULT_UNLOCKED_MAPS = ["美食镇", "雨林"];
+const DEFAULT_UNLOCKED_MAPS = ["美食镇", "幽毒雨林"];
 
 async function loadHuntData(){
   const status=document.getElementById("huntStatus");
@@ -917,20 +902,23 @@ async function loadHuntData(){
   if(!maps.length){
     // 如果数据库为空，填充默认示例地图
     maps = [
-      { id: 1, name: "美食镇", description: "香气扑鼻的大城镇，新手冒险者的起点。", danger_level: 1, icon: "🏘️" },
-      { id: 2, name: "雨林", description: "潮湿茂密的原始森林，栖息着多汁的植物与野兽。", danger_level: 2, icon: "🌴" },
-      { id: 3, name: "烈焰火山", description: "火元素密集的危险区域，料理顶级烧烤素材的圣地。", danger_level: 4, icon: "🌋" },
-      { id: 4, name: "深海冰洞", description: "极寒之地，盛产珍稀的冷水海鲜魔物。", danger_level: 5, icon: "❄️" }
+      { id: 1, region_key:"town", region_name: "美食镇", description: "香气扑鼻的新手城镇。", danger_level: 0, icon: "🏘️" },
+      { id: 2, region_key:"rainforest", region_name: "幽毒雨林", description: "潮湿幽深、弥漫毒雾的雨林。", danger_level: 1, icon: "🌳" },
+      { id: 3, region_key:"plains", region_name: "獠牙原野", description: "栖息着活跃野兽的广阔原野。", danger_level: 2, icon: "🌿" },
+      { id: 4, region_key:"mountains", region_name: "炎狱山岭", description: "地势险峻、热浪翻涌的山岭。", danger_level: 3, icon: "⛰️" },
+      { id: 5, region_key:"snowfield", region_name: "霜牙荒原", description: "寒风凛冽的冰雪荒原。", danger_level: 3, icon: "❄️" },
+      { id: 6, region_key:"deep_sea", region_name: "魔潮深海", description: "危机四伏的深海区域。", danger_level: 5, icon: "🌊" }
     ];
   }
 
   // 标记地图解锁状态
   maps.forEach(m => {
     const name = mapName(m);
-    m.isLocked = !(DEFAULT_UNLOCKED_MAPS.includes(name) || serverUnlocked.includes(name));
+    const aliases = name === "幽毒雨林" ? ["雨林"] : [];
+    m.isLocked = !(DEFAULT_UNLOCKED_MAPS.includes(name) || serverUnlocked.includes(name) || aliases.some(n => DEFAULT_UNLOCKED_MAPS.includes(n) || serverUnlocked.includes(n)));
   });
 
-  status.textContent="点击解开锁定的地图进入该区域。未解锁地图需提交料理并经 GM 审核。";
+  status.textContent="点击解开锁定的地图进入该区域。未解锁地图需提交料理并经 管理员 审核。";
   renderMaps();
 }
 
@@ -965,8 +953,36 @@ async function selectMap(id){
 
   await refreshTeam();
 
-  // 使用预设与数据库结合的怪物列表
-  monsters = PRESET_MONSTERS;
+  // 优先读取当前地区在 Supabase 中配置的魔物与掉落；仅在数据库没有该地区魔物时使用兼容预设。
+  const {data: regionMonsters, error: monsterError} = await db
+    .from("monsters").select("*").eq("region_id", selectedMap.id).order("id", {ascending:true});
+  if (monsterError) console.warn("读取地区魔物失败，尝试兼容预设：", monsterError.message);
+  if (regionMonsters && regionMonsters.length) {
+    const ids = regionMonsters.map(m => m.id);
+    const {data: dropRows, error: dropError} = await db.from("monster_drops")
+      .select("monster_id,item_name,item_desc,min_count,max_count,drop_weight,is_rare")
+      .in("monster_id", ids).order("id", {ascending:true});
+    if (dropError) console.warn("读取魔物掉落失败：", dropError.message);
+    monsters = regionMonsters.map(m => ({
+      ...m,
+      name: m.monster_name,
+      level: Math.max(1, Number(m.difficulty || mapDanger(selectedMap) + 1)),
+      hp: 35 + Number(m.difficulty || 1) * 22 + Number(m.magic_level || 0) * 5,
+      atk: 5 + Number(m.difficulty || 1) * 3 + Number(m.magic_level || 0),
+      def: 2 + Number(m.difficulty || 1) * 2,
+      icon: m.icon || "👾",
+      drops: (dropRows || []).filter(d => Number(d.monster_id) === Number(m.id))
+    }));
+  } else {
+    // 不再把同一套预设魔物套用到所有地区，避免地图遭遇串区。
+    monsters = [];
+  }
+  if (!monsters.length) {
+    document.getElementById("huntModalMsg").textContent = "这个地区暂时没有配置可遭遇的魔物，请联系 管理员。";
+    document.getElementById("encounters").innerHTML = "<p class='muted'>本地区暂无魔物配置。配置完成后即可狩猎。</p>";
+    document.getElementById("encounterStartBtn").disabled = true;
+    return;
+  }
 
   const encounterRoll=d20();
   const index=(encounterRoll-1)%monsters.length;
@@ -1003,12 +1019,12 @@ function hashId(v){let n=0;for(const c of String(v)){n=(n*31+c.charCodeAt(0))%99
 
 function buildMonsterStats(m,map){
   const danger=Math.max(0,mapDanger(map));
-  const level=m.level || Math.max(1,danger+1+(hashId(m.id)%3));
+  const level=Math.max(1,Number(m.level)||Math.max(1,danger+1+(hashId(m.id)%3)));
   return {
     level,
     maxHp:Math.max(1,Number(m.hp)|| (50+level*18+(hashId(m.id)%16))),
-    attack: m.atk || (7+level*3+(hashId(m.id)%5)),
-    defense: m.def || (3+Math.floor(level*1.5)),
+    attack: Number(m.atk)|| (7+level*3+(hashId(m.id)%5)),
+    defense: Number(m.def)|| (3+Math.floor(level*1.5)),
     speed: 5+level+(hashId(m.id)%4)
   };
 }
@@ -1530,12 +1546,15 @@ async function rollLoot(){
   let chosen=null;
   if(drops.length===1)chosen=drops[0];
   else if(drops.length>1){
-    const sorted=[...drops].sort((a,b)=>Number(a.drop_weight??0)-Number(b.drop_weight??0));
-    const index=Math.min(sorted.length-1,Math.floor((roll/20)*sorted.length));
+    // 按普通到稀有排序，D20 越高越偏向稀有素材；熟练度与队伍协作提高有效点数。
+    const sorted=[...drops].sort((a,b)=>Number(b.drop_weight??10)-Number(a.drop_weight??10));
+    const effectiveRoll=Math.min(20,Math.max(1,roll+profBonus+coop));
+    const index=Math.min(sorted.length-1,Math.floor(((effectiveRoll-1)/20)*sorted.length));
     chosen=sorted[index];
   }
-  const tier=roll>=18?"✨ 极佳掉落":roll>=14?"🌟 稀有掉落":roll>=8?"🍖 良好掉落":"📦 普通掉落";
-  const lines=[`🎲 D20：${roll}`,`📈 熟练度修正：+${profBonus}`,`👥 队伍协作：+${coop}`,`⭐ 掉落判定：${tier}`,`🎯 骰子结果决定素材：${chosen?.item_name||"无"}`];
+  const effectiveRoll=Math.min(20,Math.max(1,roll+profBonus+coop));
+  const tier=effectiveRoll>=18?"✨ 极佳掉落":effectiveRoll>=14?"🌟 稀有掉落":effectiveRoll>=8?"🍖 良好掉落":"📦 普通掉落";
+  const lines=[`🎲 D20：${roll}`,`📈 熟练度修正：+${profBonus}`,`👥 队伍协作：+${coop}`,`⭐ 有效点数：${effectiveRoll}（原始 ${roll} + 熟练度 ${profBonus} + 协作 ${coop}）`,`⭐ 掉落判定：${tier}`,`🎯 骰子结果决定素材：${chosen?.item_name||"无"}`];
   const obtained=[];
   if(chosen){
     const min=Math.max(1,Number(chosen.min_count??1)||1);
@@ -1647,7 +1666,7 @@ async function rest(){
 }
 
 /* =============================================================
-   👑 GM 管理员后台设置功能逻辑
+   👑 管理员 管理员后台设置功能逻辑
    ============================================================= */
 function showAdminPane(name){
   if(!isAdmin())return;
@@ -1753,7 +1772,7 @@ async function loadAdminSelfData(){
   }
   if(!p){document.getElementById("adminSelfMsg").textContent="你还没有冒险者角色，请先创建角色。";return;}
   fillAdminFields("self_",p);
-  document.getElementById("adminSelfMsg").textContent="已读取当前 GM 角色："+(p.name||"无名冒险者");
+  document.getElementById("adminSelfMsg").textContent="已读取当前 管理员 角色："+(p.name||"无名冒险者");
 }
 
 async function saveAdminSelfData(){
@@ -1763,7 +1782,7 @@ async function saveAdminSelfData(){
   const {data,error}=await db.from("adventurers").update(updates).eq("user_id",currentUser.id).select().single();
   if(error){msg.textContent="保存失败："+error.message;msg.className="err";return;}
   currentAdventurer=data;
-  msg.textContent="✅ 我的 GM 数据已保存。";msg.className="ok";
+  msg.textContent="✅ 我的管理员数据已保存。";msg.className="ok";
   await loadPanel();
 }
 
@@ -1836,10 +1855,10 @@ async function loadAdminPlayerMaps(initial=false){
   const unlocked=new Set((data||[]).map(x=>x.map_name));
   const {data:allMaps}=await db.from("game_regions").select("*").order("id",{ascending:true});
   let mapsForAdmin=allMaps||[];
-  if(!mapsForAdmin.length)mapsForAdmin=[{name:"美食镇"},{name:"雨林"},{name:"烈焰火山"},{name:"深海冰洞"}];
+  if(!mapsForAdmin.length)mapsForAdmin=[{name:"美食镇"},{name:"幽毒雨林"},{name:"獠牙原野"},{name:"炎狱山岭"},{name:"霜牙荒原"},{name:"魔潮深海"}];
   const extra=mapsForAdmin.filter(m=>!DEFAULT_UNLOCKED_MAPS.includes(mapName(m)));
   box.innerHTML=`<div class="small muted">已解锁额外地图：</div>`+
-    (data?.length?data.map(x=>`<span class="stat">🗺️ ${escapeHtml(x.map_name)}</span>`).join(""):"<p class='muted'>暂无额外解锁（美食镇、雨林属于默认开放）。</p>")+
+    (data?.length?data.map(x=>`<span class="stat">🗺️ ${escapeHtml(x.map_name)}</span>`).join(""):"<p class='muted'>暂无额外解锁（美食镇、幽毒雨林属于默认开放）。</p>")+
     `<hr><div class="small muted">手动给该玩家解锁：</div>`+
     extra.map(m=>{const n=mapName(m);return `<div class="row" style="margin-top:8px;justify-content:space-between"><span>${escapeHtml(m.icon||"🗺️")} ${escapeHtml(n)}</span><button class="secondary" ${unlocked.has(n)?'disabled':''} onclick="grantPlayerMap('${escapeJs(uid)}','${escapeJs(n)}')">${unlocked.has(n)?'已解锁':'🔓 解锁给该玩家'}</button></div>`}).join("");
 }
@@ -1859,7 +1878,7 @@ async function loadRecipeMapOptions(){
   if(!sel)return;
   const {data}=await db.from("game_regions").select("*").order("id",{ascending:true});
   let list=data||[];
-  if(!list.length)list=[{name:"美食镇"},{name:"雨林"},{name:"烈焰火山"},{name:"深海冰洞"}];
+  if(!list.length)list=[{name:"美食镇"},{name:"幽毒雨林"},{name:"獠牙原野"},{name:"炎狱山岭"},{name:"霜牙荒原"},{name:"魔潮深海"}];
   const available=list.filter(m=>!DEFAULT_UNLOCKED_MAPS.includes(mapName(m)));
   sel.innerHTML=available.length ? available.map(m=>`<option value="${escapeHtml(mapName(m))}">${escapeHtml(m.icon||"🗺️")} ${escapeHtml(mapName(m))}</option>`).join("") : `<option value="">目前没有可申请地图</option>`;
 }
