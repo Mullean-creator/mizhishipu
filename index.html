@@ -105,10 +105,10 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
       </div>
 
       <div class="card">
-        <h2>🛏️ 客栈</h2>
-        <p class="muted">在这里休息，恢复行动点。</p>
-        <button class="primary" onclick="rest()">休息并恢复到最大 AP</button>
-        <p id="restMsg" class="muted"></p>
+        <h2>🏘️ 美食镇入口</h2>
+        <p class="muted">前往美食镇，拜访莉莉娅会长、艾恩斯神父与神秘商店，或到客栈恢复行动点。</p>
+        <button class="primary" onclick="showSection('town')">进入美食镇</button>
+        <p id="restHomeStatus" class="muted"></p>
       </div>
     </div>
 
@@ -610,7 +610,7 @@ function showSection(name){
   if(name==="bestiary")loadBestiary();
   if(name==="hunt"){loadHuntData(); startTeamRefresh();}else{stopTeamRefresh();}
   if(name==="recipe"){loadRecipeList();loadRecipeMapOptions();}
-  if(name==="town"){townOpen('shop');}
+  if(name==="town"){townOpen('shop');renderRestStatus();}
   if(name==="buff"){renderCustomBuffs();}
   if(name==="admin")loadAdminDashboard();
 }
@@ -670,8 +670,11 @@ async function loadAdventurer(){
     return;
   }
 
+  await syncLevelAP();
+  await updateRestProgress();
   document.getElementById("welcomeText").textContent=
-    "欢迎回来，"+data.name+"！今天也去冒险吧。";
+    "欢迎回来，"+currentAdventurer.name+"！今天也去冒险吧。";
+  renderRestStatus();
   await loadPanel();
 }
 
@@ -752,7 +755,7 @@ async function loadPanel(){
         <div>🧬 种族：${escapeHtml(d.race)}</div>
         <div>⚔️ 职业：${escapeHtml(d.job)}</div>
         <div>📍 位置：${escapeHtml(d.location||"城镇")}</div>
-        <div>⚡ 行动点：${d.action_points??0} / ${d.max_action_points??5}</div>
+        <div>⚡ 行动点：${d.action_points??0} / ${d.max_action_points??5}（每升 1 级上限 +1）</div>
         <div>💰 金币：${d.coins??0} 枚</div>
         <div>🏆 等级：${Math.max(1,Number(d.level)||1)}</div>
         <div>✨ 经验：${Math.max(0,Number(d.experience)||0)} / ${Math.max(1,Number(d.level)||1)*10}</div>
@@ -819,6 +822,7 @@ async function loadBestiary(){
    🍳 料理提交与查看
    ========================= */
 async function submitRecipe(){
+  if(isResting()){alert("你正在客栈休息，AP 回满并结束休息后才能提交料理。");return;}
   const name = document.getElementById("recipeName").value.trim();
   const desc = document.getElementById("recipeDesc").value.trim();
   const requestedMap = document.getElementById("recipeMapRequest")?.value || "";
@@ -1239,6 +1243,7 @@ function teamCoopBonus(){ return activeTeam ? Math.max(0,Math.min(4,teamMembers.
 function teamMemberCount(){ return activeTeam ? Math.max(1,teamMembers.length) : 1; }
 
 async function startBattle(){
+  if(isResting()){alert('你正在客栈休息，AP 回满并结束休息后才能狩猎。');return;}
   if(!selectedMonster||!selectedMap||!currentAdventurer)return;
   if(Number(currentAdventurer.action_points||0)<1){
     const e=document.getElementById("huntModalMsg");
@@ -1580,10 +1585,15 @@ async function finishBattle(win){
     newLevel++;
     levelUps.push(newLevel);
   }
+  const oldMaxAP=Math.max(5,Number(currentAdventurer?.max_action_points)||5);
+  const oldAP=Math.max(0,Number(currentAdventurer?.action_points)||0);
+  const newMaxAP=oldMaxAP>=9999?oldMaxAP:Math.max(5,4+newLevel);
   const statUpdates={
     coins:Number(currentAdventurer?.coins||0)+rewardCoins,
     level:newLevel,
-    experience:newExp
+    experience:newExp,
+    max_action_points:newMaxAP,
+    action_points:oldMaxAP>=9999?oldAP:Math.min(newMaxAP,oldAP+Math.max(0,newMaxAP-oldMaxAP))
   };
   if(levelUps.length){
     // 每次升级，六项基础属性各 +1；与数据库现有属性列对应。
@@ -1758,6 +1768,7 @@ async function addInventoryItem(itemName,itemDesc,quantity){
 function getItemCount(item){return Number(item.item_count ?? item.count ?? 0)}
 
 async function signin(){
+  if(isResting()){alert("你正在客栈休息，AP 回满并结束休息后才能签到。");return;}
   const e=document.getElementById("signinMsg");
   const {data,error}=await db.rpc("daily_signin");
   if(error){e.textContent=error.message;e.className="err";return}
@@ -1766,14 +1777,89 @@ async function signin(){
   await loadAdventurer();
 }
 
-async function rest(){
-  const e=document.getElementById("restMsg");
-  const {data,error}=await db.rpc("rest_at_inn");
-  if(error){e.textContent=error.message;e.className="err";return}
-  if(data===-1){e.textContent="旅店冷却中，1小时后才能再次休息。";return}
-  e.textContent="休息成功！AP 已恢复到 "+data+"。";e.className="ok";
-  await loadAdventurer();
+// AP 规则：1 级上限 5；每升 1 级，上限 +1。休息时每 60 分钟恢复 1 AP。
+const REST_AP_INTERVAL_MS=60*60*1000;
+function levelMaxAP(level){return Math.max(5,4+Math.max(1,Number(level)||1));}
+function restTimestamp(){const v=currentAdventurer?.last_rest;return v?new Date(v).getTime():NaN;}
+function isResting(){
+  if(!currentAdventurer||!currentAdventurer.last_rest)return false;
+  const ts=restTimestamp();if(!Number.isFinite(ts))return false;
+  const max=Math.max(5,Number(currentAdventurer.max_action_points)||5);
+  // 休息状态持续到玩家 AP 回满后主动结束，不因离线时间过长自动取消。
+  return true;
 }
+async function syncLevelAP(){
+  if(!currentUser||!currentAdventurer)return;
+  const oldMax=Math.max(5,Number(currentAdventurer.max_action_points)||5);
+  if(oldMax>=9999)return; // 保留管理员的无限 AP 设置
+  const target=levelMaxAP(currentAdventurer.level);
+  if(oldMax===target)return;
+  const oldAP=Math.max(0,Number(currentAdventurer.action_points)||0);
+  const nextAP=Math.min(target,oldAP+(target>oldMax&&oldAP>=oldMax?target-oldMax:0));
+  const {data,error}=await db.from('adventurers').update({max_action_points:target,action_points:nextAP}).eq('user_id',currentUser.id).select().single();
+  if(!error&&data)currentAdventurer=data;
+}
+async function updateRestProgress(){
+  if(!currentUser||!currentAdventurer?.last_rest)return;
+  const start=restTimestamp();if(!Number.isFinite(start))return;
+  const now=Date.now();
+  const elapsed=Math.max(0,now-start);
+  const gained=Math.floor(elapsed/REST_AP_INTERVAL_MS);
+  const max=Math.max(5,Number(currentAdventurer.max_action_points)||5);
+  const ap=Math.max(0,Number(currentAdventurer.action_points)||0);
+  const nextAP=Math.min(max,ap+gained);
+  const nextStamp=new Date(start+gained*REST_AP_INTERVAL_MS).toISOString();
+  if(gained>0||nextAP!==ap){
+    const {data,error}=await db.from('adventurers').update({action_points:nextAP,last_rest:nextStamp}).eq('user_id',currentUser.id).select().single();
+    if(!error&&data)currentAdventurer=data;
+  }
+  // AP 回满后继续保留休息状态，直到玩家主动结束休息。
+}
+function renderRestStatus(){
+  const d=currentAdventurer;if(!d)return;
+  const ap=Math.max(0,Number(d.action_points)||0),max=Math.max(5,Number(d.max_action_points)||5);
+  const active=isResting();
+  const home=document.getElementById('restHomeStatus');
+  if(home)home.textContent=active?(ap>=max?'🛏️ 你正在休息，AP 已回满，可以前往客栈结束休息。':`🛏️ 你正在休息：AP ${ap}/${max}，每 60 分钟恢复 1 点。`):'当前没有在休息。';
+  const status=document.getElementById('innRestStatus'),actions=document.getElementById('innRestActions');
+  if(status)status.innerHTML=active?`<b>🛏️ 当前状态：正在休息</b><p>行动点：${ap} / ${max}</p>${ap>=max?'<p class="ok">AP 已回满！你可以自行结束休息。</p>':'<p class="muted">休息期间其他游戏行为已锁定。每 60 分钟恢复 1 点 AP。</p>'}`:`<b>当前状态：未休息</b><p>行动点：${ap} / ${max}</p>`;
+  if(actions)actions.innerHTML=active?(ap>=max?'<button class="primary" onclick="cancelRest()">结束休息，恢复行动</button>':'<button class="secondary" disabled>休息中，请等待 AP 回满</button>'):'<button class="primary" onclick="rest()">开始休息</button>';
+}
+async function rest(){
+  if(!currentUser||!currentAdventurer)return;
+  await updateRestProgress();
+  if(isResting()){renderRestStatus();return;}
+  const e=document.getElementById('restMsg');
+  const {data,error}=await db.from('adventurers').update({last_rest:new Date().toISOString()}).eq('user_id',currentUser.id).select().single();
+  if(error||!data){if(e){e.textContent='无法开始休息：'+(error?.message||'未知错误');e.className='err';}return;}
+  currentAdventurer=data;
+  if(e){e.textContent='已开始休息。每 60 分钟恢复 1 点 AP；AP 回满后可自行结束。';e.className='ok';}
+  renderRestStatus();
+}
+async function cancelRest(){
+  if(!currentUser||!currentAdventurer)return;
+  await updateRestProgress();
+  const ap=Math.max(0,Number(currentAdventurer.action_points)||0),max=Math.max(5,Number(currentAdventurer.max_action_points)||5);
+  if(ap<max){alert('行动点还没有回满，请继续休息。');renderRestStatus();return;}
+  const {data,error}=await db.from('adventurers').update({last_rest:null}).eq('user_id',currentUser.id).select().single();
+  if(error||!data){alert('结束休息失败：'+(error?.message||'未知错误'));return;}
+  currentAdventurer=data;renderRestStatus();
+  const e=document.getElementById('restMsg');if(e){e.textContent='休息已结束，可以继续行动了。';e.className='ok';}
+}
+// 休息期间拦截所有游戏行为按钮，仅保留菜单、美食镇/客栈导航与结束休息。
+document.addEventListener('click',function(ev){
+  if(!isResting())return;
+  const b=ev.target.closest('button');if(!b)return;
+  const action=b.getAttribute('onclick')||'';
+  const allowed=action.includes('toggleSide(')||action.includes('closeSide(')||action.includes('logout(')||action.includes("showSection('main')")||action.includes("showSection('panel')")||action.includes("showSection('town')")||action.includes("townOpen('inn')")||action.includes('cancelRest(');
+  if(!allowed){ev.preventDefault();ev.stopImmediatePropagation();const msg=document.getElementById('restMsg');if(msg){msg.textContent='你正在客栈休息，AP 回满后才能进行其他行为。';msg.className='err';}return;}
+},true);
+setInterval(async()=>{
+  if(currentUser&&currentAdventurer?.last_rest&&isResting()){
+    await updateRestProgress();renderRestStatus();
+    if(document.getElementById('panelSection')?.classList.contains('active'))await loadPanel();
+  }
+},30000);
 
 /* =============================================================
    👑  管理员后台设置功能逻辑
@@ -2008,8 +2094,11 @@ function townOpen(type){
     box.innerHTML='<h3>🛡️ 冒险者公会</h3><div class="stat">📜 公会会长：莉莉娅会长</div><p>「欢迎来到美食镇冒险者公会！我会为你准备适合已探索地区的武器与防具。新的委托开放后，也会在这里通知大家。」</p><div class="stat">🏅 冒险者公会徽章：美食镇入会纪念</div><div id="guildGoods"><p class="muted">正在整理装备……</p></div>';
     loadShop('gear');return;
   }
-  const d={inn:'<h3>🛏️ 客栈</h3><p>在客栈休息可以恢复行动点。</p><button class="primary" onclick="rest()">休息并恢复到最大 AP</button>'};
-  box.innerHTML=d[type]||'<p>请选择美食镇设施。</p>';
+  if(type==='inn'){
+    box.innerHTML='<h3>🛏️ 客栈</h3><p>休息期间无法进行狩猎、购买、出售、签到、穿戴装备、提交料理或其他游戏行为。每 60 分钟恢复 1 点 AP；AP 回满后可自行结束休息。</p><div id="innRestStatus" class="huntResult" style="margin:12px 0">正在读取休息状态……</div><div id="innRestActions"></div><p id="restMsg" class="muted"></p>';
+    renderRestStatus();return;
+  }
+  box.innerHTML='<p>请选择美食镇设施。</p>';
 }
 
 // ================= 商店与装备系统（使用现有 inventory/adventurers 表，不新增数据库字段） =================
@@ -2092,6 +2181,7 @@ async function loadShop(kind='mystery'){
   box.innerHTML=`<div class="stat">💰 当前金币：${Number(currentAdventurer.coins)||0}</div><h4>✨ 阿尔德里亚·密斯西里的固定属性礼包</h4><p class="small muted">每个礼包固定提升一项属性 +2，不需要随机抽取。特殊材料指掉落表中标记为稀有的魔物素材；背包里至少有 1 份此类素材即可选择材料支付。</p>${packs}<h4>🧺 素材回收</h4><p class="small muted">普通素材 5 金币/份；特殊/稀有素材 20 金币/份。装备与恢复药剂不能出售。</p>${selling}`;
 }
 async function buyAttributePack(key,currency='coins'){
+  if(isResting()){alert('你正在客栈休息，AP 回满并结束休息后才能购买。');return;}
   if(!currentUser||!currentAdventurer)return;
   const pack=ATTRIBUTE_PACKS.find(x=>x.key===key);if(!pack){alert('没有找到这个属性礼包。');return;}
   const lockKey='attribute-'+key+'-'+currency;if(window[lockKey])return;window[lockKey]=true;
@@ -2130,6 +2220,7 @@ async function buyAttributePack(key,currency='coins'){
   }finally{window[lockKey]=false;}
 }
 async function buyShopItem(name){
+  if(isResting()){alert("你正在客栈休息，AP 回满并结束休息后才能购买。");return;}
   if(!currentUser||!currentAdventurer)return;
   const potion=SHOP_POTIONS.find(x=>x.name===name),gear=EQUIPMENT_CATALOG.find(x=>x.name===name);
   const item=potion||gear;if(!item){alert('没有找到该商品。');return;}
@@ -2157,6 +2248,7 @@ async function buyShopItem(name){
   }finally{window[buttonKey]=false;}
 }
 async function sellMaterial(id,quantity){
+  if(isResting()){alert("你正在客栈休息，AP 回满并结束休息后才能出售素材。");return;}
   if(!currentUser||!currentAdventurer)return;
   const {data:item,error}=await db.from('inventory').select('*').eq('id',id).eq('player_id',currentUser.id).maybeSingle();
   if(error||!item){alert('读取素材失败：'+(error?.message||'物品不存在'));return;}
@@ -2177,11 +2269,12 @@ async function getEquippedBonuses(){
   try{const rows=await getInventoryRows();for(const row of rows){const e=parseEquipmentMeta(row);if(!e||!e.equipped)continue;if(e.slot==='weapon'&&!result.attack){result.attack=e.attack;result.weaponName=row.item_name;}else if(e.slot==='armor'&&!result.defense){result.defense=e.defense;result.armorName=row.item_name;}}}catch(e){console.warn('读取装备加成失败',e);}return result;
 }
 async function equipItem(id){
+  if(isResting()){alert("你正在客栈休息，AP 回满并结束休息后才能更换装备。");return;}
   const rows=await getInventoryRows();const selected=rows.find(x=>String(x.id)===String(id));const meta=parseEquipmentMeta(selected);if(!selected||!meta){alert('找不到这件装备。');return;}
   for(const row of rows){const e=parseEquipmentMeta(row);if(!e||e.slot!==meta.slot)continue;const next=equipmentMarker({slot:e.slot,attack:e.attack,defense:e.defense},String(row.id)===String(id));if(row.item_desc!==next){const {error}=await db.from('inventory').update({item_desc:next}).eq('id',row.id).eq('player_id',currentUser.id);if(error){alert('装备穿戴失败：'+error.message);return;}}}
   await loadEquipment();await loadInventory();await loadPanel();
 }
-async function unequipItem(id){const rows=await getInventoryRows();const row=rows.find(x=>String(x.id)===String(id));const e=parseEquipmentMeta(row);if(!row||!e)return;const {error}=await db.from('inventory').update({item_desc:equipmentMarker({slot:e.slot,attack:e.attack,defense:e.defense},false)}).eq('id',id).eq('player_id',currentUser.id);if(error){alert('卸下失败：'+error.message);return;}await loadEquipment();await loadInventory();await loadPanel();}
+async function unequipItem(id){if(isResting()){alert("你正在客栈休息，AP 回满并结束休息后才能更换装备。");return;}const rows=await getInventoryRows();const row=rows.find(x=>String(x.id)===String(id));const e=parseEquipmentMeta(row);if(!row||!e)return;const {error}=await db.from('inventory').update({item_desc:equipmentMarker({slot:e.slot,attack:e.attack,defense:e.defense},false)}).eq('id',id).eq('player_id',currentUser.id);if(error){alert('卸下失败：'+error.message);return;}await loadEquipment();await loadInventory();await loadPanel();}
 async function loadEquipment(){
   const summary=document.getElementById('equippedSummary'),box=document.getElementById('equipmentInventory');if(!summary||!box||!currentUser)return;
   summary.textContent='正在读取装备……';box.innerHTML='';
@@ -2190,10 +2283,10 @@ async function loadEquipment(){
   }catch(e){summary.innerHTML='<p class="err">读取装备失败：'+escapeHtml(e.message)+'</p>';}
 }
 
-function drawFoodBuff(){const b=FOOD_BUFF_POOL[Math.floor(Math.random()*FOOD_BUFF_POOL.length)];document.getElementById('drawBuffResult').innerHTML='<b>🎉 抽到了：'+escapeHtml(b[0])+'</b><br>'+escapeHtml(b[1])+'<br><span class="small muted">'+escapeHtml(b[2])+'</span>';}
+function drawFoodBuff(){if(isResting()){alert('你正在客栈休息，AP 回满并结束休息后才能进行其他行为。');return;}const b=FOOD_BUFF_POOL[Math.floor(Math.random()*FOOD_BUFF_POOL.length)];document.getElementById('drawBuffResult').innerHTML='<b>🎉 抽到了：'+escapeHtml(b[0])+'</b><br>'+escapeHtml(b[1])+'<br><span class="small muted">'+escapeHtml(b[2])+'</span>';}
 function buffKey(){return currentUser?'mystery_recipe_buffs_'+currentUser.id:'mystery_recipe_buffs_guest';}
 function getCustomBuffs(){try{return JSON.parse(localStorage.getItem(buffKey())||'[]')}catch(e){return [];}}
-function saveCustomBuff(){const dish=document.getElementById('customBuffDish').value.trim(),name=document.getElementById('customBuffName').value.trim(),desc=document.getElementById('customBuffDesc').value.trim(),msg=document.getElementById('customBuffMsg');if(!dish||!name||!desc){msg.textContent='请把料理名称、Buff 名称和效果填写完整。';return;}const list=getCustomBuffs();list.unshift({dish,name,desc,created_at:new Date().toISOString()});localStorage.setItem(buffKey(),JSON.stringify(list));document.getElementById('customBuffDish').value='';document.getElementById('customBuffName').value='';document.getElementById('customBuffDesc').value='';msg.textContent='保存成功！';renderCustomBuffs();}
+function saveCustomBuff(){if(isResting()){alert('你正在客栈休息，AP 回满并结束休息后才能进行其他行为。');return;}const dish=document.getElementById('customBuffDish').value.trim(),name=document.getElementById('customBuffName').value.trim(),desc=document.getElementById('customBuffDesc').value.trim(),msg=document.getElementById('customBuffMsg');if(!dish||!name||!desc){msg.textContent='请把料理名称、Buff 名称和效果填写完整。';return;}const list=getCustomBuffs();list.unshift({dish,name,desc,created_at:new Date().toISOString()});localStorage.setItem(buffKey(),JSON.stringify(list));document.getElementById('customBuffDish').value='';document.getElementById('customBuffName').value='';document.getElementById('customBuffDesc').value='';msg.textContent='保存成功！';renderCustomBuffs();}
 function renderCustomBuffs(){const box=document.getElementById('myBuffList');if(!box)return;const list=getCustomBuffs();box.innerHTML=list.length?list.map((b,i)=>'<div class="inventoryItem"><b>🍳 '+escapeHtml(b.dish)+'</b><br><strong>'+escapeHtml(b.name)+'</strong><br><span class="muted">'+escapeHtml(b.desc)+'</span><br><button class="danger" onclick="deleteCustomBuff('+i+')">删除</button></div>').join(''):'<p class="muted">暂无自定义 Buff。</p>';}
 function deleteCustomBuff(i){const list=getCustomBuffs();list.splice(i,1);localStorage.setItem(buffKey(),JSON.stringify(list));renderCustomBuffs();}
 
