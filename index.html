@@ -397,6 +397,7 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
       <button class="secondary" onclick="battleAction('run')">🏃 逃跑</button>
     </div>
     <div id="battleResult" class="huntResult" style="display:none"></div>
+    <button id="battleExpConfirmBtn" class="primary" style="display:none;width:100%;margin-top:12px" onclick="confirmExperienceAndContinue()">✨ 确认本次经验结算，继续掉落判定</button>
   </div>
 </div>
 
@@ -452,7 +453,7 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
       </div>
       <div id="lootLog" class="battleLog" style="height:180px;margin-top:10px"></div>
     </div>
-    <button id="lootExpConfirmBtn" class="primary" style="width:100%;margin-top:12px" onclick="confirmExperienceAndContinue()">确认经验，继续进行掉落判定</button>
+    <button id="lootExpConfirmBtn" class="primary" style="display:none;width:100%;margin-top:12px" onclick="confirmExperienceAndContinue()">确认经验，继续进行掉落判定</button>
     <button id="lootRollBtn" class="primary" style="display:none;width:100%;margin-top:12px" onclick="rollLoot()">🎲 投掷 D20 · 进行掉落判定</button>
     <button id="lootReturnBtn" class="secondary" style="display:none;width:100%;margin-top:10px" onclick="closeLootModal()">返回地图</button>
   </div>
@@ -1241,6 +1242,7 @@ async function startBattle(){
   // 先显示并刷新 HP，再写战斗日志。这样即使地图名称/队伍提示异常，也不会出现 0 / 0。
   document.getElementById("battleModalBack").classList.add("show");
   document.getElementById("battleResult").style.display="none";
+  document.getElementById("battleExpConfirmBtn").style.display="none";
   document.getElementById("battleActions").style.display="grid";
   document.getElementById("battlePlayerName").textContent=currentAdventurer.name||"冒险者";
   document.getElementById("battleMonsterName").textContent=(selectedMonster.icon||"👾")+" "+monsterName(selectedMonster)+" Lv."+m.level;
@@ -1566,38 +1568,30 @@ async function finishBattle(win){
   await recordHunt(true,10);
   addBattleLog("🏆 魔物被击败！图鉴已记录。",true);
   document.getElementById("battleResult").style.display="block";
-  document.getElementById("battleResult").textContent="🏆 狩猎成功！\n💰 +"+rewardCoins+" 金币　✨ +"+rewardExp+" 经验"+levelText+"\n📈 当前等级：Lv."+Math.max(1,Number(currentAdventurer?.level)||oldLevel)+"　经验："+Math.max(0,Number(currentAdventurer?.experience)||0)+" / "+(Math.max(1,Number(currentAdventurer?.level)||oldLevel)*10)+"\n📖 已解锁图鉴："+monsterName(selectedMonster)+"\n\n请先确认本次经验结算，再进行掉落判定。";
+  document.getElementById("battleResult").textContent="🏆 狩猎成功！\n💰 +"+rewardCoins+" 金币　✨ +"+rewardExp+" 经验"+levelText+"\n📈 当前等级：Lv."+Math.max(1,Number(currentAdventurer?.level)||oldLevel)+"　经验："+Math.max(0,Number(currentAdventurer?.experience)||0)+" / "+(Math.max(1,Number(currentAdventurer?.level)||oldLevel)*10)+"\n📖 已解锁图鉴："+monsterName(selectedMonster)+"\n\n请查看上方战斗记录，确认经验结算后再进行掉落判定。";
+  document.getElementById("battleExpConfirmBtn").style.display="block";
   updateBattleUI();
-  setTimeout(()=>openLootModal(),500);
 }
 
 function openLootModal(){
   if(!selectedMonster)return;
-  const exp=Number(battle?.rewardExp)||0;
-  const levelUps=Number(battle?.levelUps)||0;
-  const level=Math.max(1,Number(currentAdventurer?.level)||1);
-  const currentExp=Math.max(0,Number(currentAdventurer?.experience)||0);
   document.getElementById("lootModalBack").classList.add("show");
   document.getElementById("lootCloseBtn").style.display="none";
   document.getElementById("lootReturnBtn").style.display="none";
-  document.getElementById("lootExpConfirmBtn").style.display="block";
-  document.getElementById("lootExpConfirmBtn").disabled=false;
-  document.getElementById("lootRollBtn").style.display="none";
+  document.getElementById("lootExpConfirmBtn").style.display="none";
+  document.getElementById("lootRollBtn").style.display="block";
   document.getElementById("lootRollBtn").disabled=false;
-  document.getElementById("lootTitle").textContent="✨ 战斗成功 · 经验结算";
-  document.getElementById("lootDesc").textContent=`击败 ${monsterName(selectedMonster)}，本次获得经验 +${exp}。当前等级：Lv.${level}；当前经验：${currentExp} / ${level*10}。${levelUps?`本次升级 ${levelUps} 次，六项基础属性各 +${levelUps}。`:""}${battle?.expSaved===false?" 注意：经验保存可能失败，请检查数据库 experience 字段。":""}`;
-  document.getElementById("lootRollResult").textContent="确认经验结算后，才会进入掉落物判定。";
+  document.getElementById("lootTitle").textContent="🎁 经验已确认 · 进行战利品判定";
+  document.getElementById("lootDesc").textContent="经验结算已在战斗栏确认。本次掉落 100% 获得素材。🎲 D20 点数越高，越容易拿到该魔物配置的稀有素材；骰子结果决定素材种类与数量。";
+  document.getElementById("lootRollResult").textContent="🎲 尚未投掷掉落骰。";
   document.getElementById("lootLog").innerHTML="";
 }
 
 function confirmExperienceAndContinue(){
   if(!battle||!battle.ended||!battle.won||battle.lootFinished)return;
-  document.getElementById("lootExpConfirmBtn").style.display="none";
-  document.getElementById("lootTitle").textContent="🏆 "+monsterName(selectedMonster)+" 已击败！";
-  document.getElementById("lootDesc").textContent="经验结算已确认。本次掉落 100% 获得素材。🎲 D20 点数越高，越容易拿到该魔物配置的稀有素材；骰子结果直接决定素材种类。";
-  document.getElementById("lootRollResult").textContent="🎲 尚未投掷掉落骰。现在可以进行掉落判定。";
-  document.getElementById("lootRollBtn").style.display="block";
-  document.getElementById("lootRollBtn").disabled=false;
+  const btn=document.getElementById("battleExpConfirmBtn");
+  if(btn)btn.style.display="none";
+  openLootModal();
 }
 
 async function rollLoot(){
