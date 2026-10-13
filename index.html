@@ -100,7 +100,7 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
 
       <div class="card">
         <h2>📅 每日签到</h2>
-        <button class="primary" onclick="signin()">签到 +500 金币</button>
+        <button class="primary" onclick="signin()">每日签到</button>
         <p id="signinMsg" class="muted"></p>
       </div>
 
@@ -142,6 +142,17 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
         <h2>🎒 我的背包</h2>
         <p class="muted">这里只显示当前登录冒险者自己的物品。</p>
         <div id="inventory"></div>
+      </div>
+    </div>
+
+    <!-- 装备栏 -->
+    <div id="equipmentSection" class="section">
+      <div class="card">
+        <h2>⚔️ 装备栏</h2>
+        <p class="muted">同时只能装备一件武器和一件防具。装备加成只在穿戴后生效。</p>
+        <div id="equippedSummary" class="huntResult">正在读取装备……</div>
+        <h3>🎒 可穿戴装备</h3>
+        <div id="equipmentInventory"></div>
       </div>
     </div>
 
@@ -309,6 +320,7 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
   <button id="navMain" class="navbtn active" onclick="showSection('main')">🏠 主页面</button>
   <button id="navPanel" class="navbtn" onclick="showSection('panel')">👤 我的面板</button>
   <button id="navInventory" class="navbtn" onclick="showSection('inventory')">🎒 我的背包</button>
+  <button id="navEquipment" class="navbtn" onclick="showSection('equipment')">⚔️ 装备栏</button>
   <button id="navBestiary" class="navbtn" onclick="showSection('bestiary')">📖 怪物图鉴</button>
   <button id="navHunt" class="navbtn" onclick="showSection('hunt')">⚔️ 地图 / 狩猎</button>
   <button id="navTown" class="navbtn" onclick="showSection('town')">🏘️ 美食镇</button>
@@ -585,7 +597,7 @@ function closeSide(){
 }
 
 function showSection(name){
-  ["main","panel","inventory","bestiary","hunt","town","buff","recipe","admin"].forEach(x=>{
+  ["main","panel","inventory","equipment","bestiary","hunt","town","buff","recipe","admin"].forEach(x=>{
     const sec=document.getElementById(x+"Section");
     if(sec)sec.classList.toggle("active",x===name);
     const nav=document.getElementById("nav"+x.charAt(0).toUpperCase()+x.slice(1));
@@ -594,6 +606,7 @@ function showSection(name){
   closeSide();
   if(name==="panel")loadPanel();
   if(name==="inventory")loadInventory();
+  if(name==="equipment")loadEquipment();
   if(name==="bestiary")loadBestiary();
   if(name==="hunt"){loadHuntData(); startTeamRefresh();}else{stopTeamRefresh();}
   if(name==="recipe"){loadRecipeList();loadRecipeMapOptions();}
@@ -727,6 +740,7 @@ async function loadPanel(){
   if(!currentAdventurer)return;
 
   const d=currentAdventurer;
+  const gearBonus=await getEquippedBonuses();
   document.getElementById("panel").innerHTML=`
     <div class="card" style="box-shadow:none;background:#f8f6f0">
       <h3>【冒险者档案】</h3>
@@ -752,34 +766,26 @@ async function loadPanel(){
       <span class="stat">✨ 魔力感知 ${d.magic_sense}</span>
       <span class="stat">👃 嗅觉 ${d.smell}</span>
       <span class="stat">📈 熟练度 ${d.proficiency}</span>
+    </div>
+    <div class="card" style="box-shadow:none;background:#f8f6f0">
+      <h3>【当前装备】</h3>
+      <div>🗡️ 武器：${escapeHtml(gearBonus.weaponName)}（攻击 +${gearBonus.attack}）</div>
+      <div>🛡️ 防具：${escapeHtml(gearBonus.armorName)}（防御 +${gearBonus.defense}）</div>
+      <button class="secondary" onclick="showSection('equipment')">前往装备栏</button>
     </div>`;
 }
 
 async function loadInventory(){
   const box=document.getElementById("inventory");
   box.innerHTML="<p class='muted'>正在读取背包……</p>";
-
-  const {data,error}=await db.from("inventory").select("*")
-    .eq("player_id",currentUser.id)
-    .order("id",{ascending:true});
-
-  if(error){
-    box.innerHTML="<p class='err'>读取背包失败："+escapeHtml(error.message)+"</p>";
-    return;
-  }
-  if(!data?.length){
-    box.innerHTML="<p class='muted'>🎒 背包目前是空的。</p>";
-    return;
-  }
-
-  box.innerHTML=data.map(item=>{
-    const count=getItemCount(item);
-    return `
-      <div class="inventoryItem">
-        <span class="badge">×${count}</span>
-        <b>📦 ${escapeHtml(item.item_name)}</b>
-        <p class="muted">${escapeHtml(item.item_desc||"暂无物品说明")}</p>
-      </div>`;
+  const {data,error}=await db.from("inventory").select("*").eq("player_id",currentUser.id).order("id",{ascending:true});
+  if(error){box.innerHTML="<p class='err'>读取背包失败："+escapeHtml(error.message)+"</p>";return;}
+  const rows=(data||[]).filter(x=>getItemCount(x)>0);
+  if(!rows.length){box.innerHTML="<p class='muted'>🎒 背包目前是空的。</p>";return;}
+  box.innerHTML=rows.map(item=>{
+    const count=getItemCount(item),eq=parseEquipmentMeta(item);
+    const desc=eq?`${eq.slot==='weapon'?'武器':'防具'}｜${eq.slot==='weapon'?'攻击':'防御'}加成 +${eq.slot==='weapon'?eq.attack:eq.defense}${eq.equipped?'｜已装备':'｜未装备'}`:displayItemDescription(item);
+    return `<div class="inventoryItem"><span class="badge">×${count}</span><b>${eq?'⚔️':'📦'} ${escapeHtml(item.item_name)}</b><p class="muted">${escapeHtml(desc||'暂无物品说明')}</p>${eq?`<button class="${eq.equipped?'secondary':'primary'}" onclick="${eq.equipped?`unequipItem('${escapeJs(item.id)}')`:`equipItem('${escapeJs(item.id)}')`}">${eq.equipped?'卸下装备':'穿戴装备'}</button>`:''}</div>`;
   }).join("");
 }
 
@@ -1255,6 +1261,10 @@ async function startBattle(){
   closeHuntModal();
 
   const p=buildPlayerStats(currentAdventurer);
+  const equipped=await getEquippedBonuses();
+  p.attack+=equipped.attack;
+  p.equipmentAttack=equipped.attack;
+  p.equipmentDefense=equipped.defense;
   const m=buildMonsterStats(selectedMonster,selectedMap);
   const coop=teamCoopBonus();
   const partySize=teamMemberCount();
@@ -1310,7 +1320,7 @@ function updateBattleUI(){
   document.getElementById("monsterHpText").textContent=hp2+" / "+m.maxHp;
   document.getElementById("playerHpFill").style.width=(Math.max(0,battle.playerHp)/p.maxHp*100)+"%";
   document.getElementById("monsterHpFill").style.width=(Math.max(0,battle.monsterHp)/m.maxHp*100)+"%";
-  document.getElementById("playerBattleStats").textContent=`技巧 ${p.technique}　耐力 ${p.endurance}　味觉 ${p.taste}　熟练度 ${p.proficiency}`;
+  document.getElementById("playerBattleStats").textContent=`技巧 ${p.technique}　耐力 ${p.endurance}　味觉 ${p.taste}　熟练度 ${p.proficiency}　装备攻击 +${p.equipmentAttack||0}　防御 +${p.equipmentDefense||0}`;
   document.getElementById("monsterBattleStats").textContent=`攻击 ${m.attack}　防御 ${m.defense}　速度 ${m.speed}`;
   setBattleTurn(battle.turn||"player");
 }
@@ -1420,8 +1430,11 @@ async function useBattlePotion(){
   const newCount=Math.max(0,oldCount-1);
   const {error:updateError}=await db.from("inventory").update({item_count:newCount}).eq("id",item.id).eq("player_id",currentUser.id);
   if(updateError){addBattleLog("❌ 血药使用失败："+updateError.message,true);return false;}
-  const heal=Math.min(30,battle.player.maxHp-battle.playerHp);
-  battle.playerHp=Math.min(battle.player.maxHp,battle.playerHp+30);
+  const potion=SHOP_POTIONS.find(x=>x.name===item.item_name);
+  const marker=String(item.item_desc||'').match(/^MZ_POTION\|(\d+)/);
+  const healAmount=potion?.heal||Number(marker?.[1])||30;
+  const heal=Math.min(healAmount,battle.player.maxHp-battle.playerHp);
+  battle.playerHp=Math.min(battle.player.maxHp,battle.playerHp+healAmount);
   addBattleLog(`🧪 你使用「${item.item_name}」，恢复 ${heal} HP。`);
   return true;
 }
@@ -1500,10 +1513,12 @@ async function resolveMonsterHit(dodgeFailed){
   // 耐力增加最大 HP，并使每次受到的魔物伤害固定减少 3 点；伤害至少为 1。
   const enduranceReduction=3;
   dmg=Math.max(1,dmg-enduranceReduction);
+  const armorReduction=Math.max(0,Number(battle.player.equipmentDefense)||0);
+  if(armorReduction)dmg=Math.max(1,dmg-armorReduction);
   const guard=battle.guardPower||0;
   if(guard)dmg=Math.max(1,Math.floor(dmg*(1-guard)));
   battle.playerHp=Math.max(0,battle.playerHp-dmg);
-  addBattleLog(`👾 魔物造成 ${dmg} 点伤害${enduranceReduction?`（耐力减伤 ${enduranceReduction}）`:""}${guard?"（防御减伤）":""}。`);
+  addBattleLog(`👾 魔物造成 ${dmg} 点伤害${enduranceReduction?`（耐力减伤 ${enduranceReduction}）`:""}${armorReduction?`（防具减伤 ${armorReduction}）`:""}${guard?"（防御减伤）":""}。`);
   battle.guardPower=0;
   updateBattleUI();
   if(battle.playerHp<=0){
@@ -1979,7 +1994,202 @@ async function loadRecipeMapOptions(){
 }
 
 const FOOD_BUFF_POOL=[["料理效果 001","食用后短时间伤口愈合速度+15%，但皮肤会散发淡淡的生肉气息","食用后生效的特殊料理效果。"],["料理效果 002","味觉钝化30分钟，吃什么都觉得香甜，苦味完全消失","食用后生效的特殊料理效果。"],["料理效果 003","接下来2小时移动负重减少20%，走路脚步轻盈","食用后生效的特殊料理效果。"],["料理效果 004","临时获得一层微弱魔物角质，抵御一次轻微磕碰","食用后生效的特殊料理效果。"],["料理效果 005","呼出气息带薄雾，不容易被远距离察觉，持续40分钟","食用后生效的特殊料理效果。"],["料理效果 006","饱腹感翻倍，一小口就饱，但是会馋同类型魔物食材","食用后生效的特殊料理效果。"],["料理效果 007","弱光视力提升，暗处视物清晰，强光会短暂刺眼","食用后生效的特殊料理效果。"],["料理效果 008","体温小幅提升，耐寒+25%，容易微微出汗","食用后生效的特殊料理效果。"],["料理效果 009","反应速度小幅提升，抬手动作更快，持续1小时","食用后生效的特殊料理效果。"],["料理效果 010","对轻度毒素抗性+10%，无法抵抗剧毒","食用后生效的特殊料理效果。"],["料理效果 011","憋气时长提升一倍，上岸后容易短暂耳鸣","食用后生效的特殊料理效果。"],["料理效果 012","指尖会长出细小嫩芽，12小时后自动脱落，无伤害","食用后生效的特殊料理效果。"],["料理效果 013","附近有敌意生物时胃部轻微发麻预警","食用后生效的特殊料理效果。"],["料理效果 014","今晚做梦会看到食材原生魔物的记忆碎片","食用后生效的特殊料理效果。"],["料理效果 015","短时间肠胃耐受力提升，不容易吃坏肚子","食用后生效的特殊料理效果。"],["料理效果 016","说话音量不自觉放大，呐喊声更洪亮，持续1小时","食用后生效的特殊料理效果。"],["料理效果 017","站在沙地、泥地不容易打滑下陷","食用后生效的特殊料理效果。"],["料理效果 018","自身魔力/气息波动减弱，难以被感知侦测","食用后生效的特殊料理效果。"],["料理效果 019","吃下这道菜，接下来6小时食欲降低","食用后生效的特殊料理效果。"],["料理效果 020","皮肤浮现转瞬即逝的微光鳞片，遇水更明显","食用后生效的特殊料理效果。"],["料理效果 021","下坡跑步速度小幅增加，上坡容易乏力","食用后生效的特殊料理效果。"],["料理效果 022","品尝料理时，短暂看见很久以前吃过这道菜的人的画面","食用后生效的特殊料理效果。"],["料理效果 023","骨骼韧性小幅提升，降低扭伤概率","食用后生效的特殊料理效果。"],["料理效果 024","所有酸味食物尝起来都是蜂蜜甜口","食用后生效的特殊料理效果。"],["料理效果 025","身上异味、汗味被掩盖，替换成料理香气","食用后生效的特殊料理效果。"],["料理效果 026","细小划痕、擦伤会缓慢结痂愈合","食用后生效的特殊料理效果。"],["料理效果 027","从较低高度坠落，冲击力减少","食用后生效的特殊料理效果。"],["料理效果 028","能隐约感知附近金属矿石的大致方向","食用后生效的特殊料理效果。"],["料理效果 029","食用后偶尔听见遥远魔物低鸣，无实际威胁","食用后生效的特殊料理效果。"],["料理效果 030","肌肉耐力提升，不容易手臂腿发酸","食用后生效的特殊料理效果。"],["料理效果 031","身体水分调节变强，短暂减轻水肿","食用后生效的特殊料理效果。"],["料理效果 032","受到抓挠攻击时，皮肤弹出一瞬微小刺尖","食用后生效的特殊料理效果。"],["料理效果 033","情绪更加平稳，不容易暴怒慌张","食用后生效的特殊料理效果。"],["料理效果 034","弹跳高度小幅提升，落地震动变大","食用后生效的特殊料理效果。"],["料理效果 035","皮肤锁水，干燥环境不会快速干裂","食用后生效的特殊料理效果。"],["料理效果 036","能感知到方圆百米内可食用生物的大致位置","食用后生效的特殊料理效果。"],["料理效果 037","短时间抵御巨响带来的耳震眩晕","食用后生效的特殊料理效果。"],["料理效果 038","指尖可以搓出一点不会烧人的淡蓝微光","食用后生效的特殊料理效果。"],["料理效果 039","今晚睡眠质量提升，休息恢复效率+20%","食用后生效的特殊料理效果。"],["料理效果 040","钝击伤害轻微降低，但是身体会变得有点迟钝","食用后生效的特殊料理效果。"],["料理效果 041","快速找到附近水源，分辨能不能饮用","食用后生效的特殊料理效果。"],["料理效果 042","慢速移动时隐蔽性变强，奔跑效果消失","食用后生效的特殊料理效果。"],["料理效果 043","弱酸接触皮肤不会快速灼伤","食用后生效的特殊料理效果。"],["料理效果 044","嗅觉大幅提升，气味分辨更敏锐，异味会格外刺鼻","食用后生效的特殊料理效果。"],["料理效果 045","情绪紧张时，周身飘出淡淡的迷惑轻烟","食用后生效的特殊料理效果。"],["料理效果 046","缓解肢体僵硬，久坐久站酸痛减轻","食用后生效的特殊料理效果。"],["料理效果 047","这一餐的热量缓慢释放，长时间不饿","食用后生效的特殊料理效果。"],["料理效果 048","短暂提升抗寒能力，不怕低温，怕滚烫热源","食用后生效的特殊料理效果。"],["料理效果 049","小声说话可以让远处一人清晰听见","食用后生效的特殊料理效果。"],["料理效果 050","体表灰尘污垢会慢慢自行脱落","食用后生效的特殊料理效果。"],["料理效果 051","徒手抓握物体摩擦力增强，不容易脱手","食用后生效的特殊料理效果。"],["料理效果 052","掌心持续带着柔和暖意","食用后生效的特殊料理效果。"],["料理效果 053","微弱瘴气无法侵入身体","食用后生效的特殊料理效果。"],["料理效果 054","可以把嘴里的味道短暂转移给另一个人","食用后生效的特殊料理效果。"],["料理效果 055","运动时耐力提升，结束后更容易疲惫","食用后生效的特殊料理效果。"],["料理效果 056","站在地面时，心神更稳定，不容易被击退","食用后生效的特殊料理效果。"],["料理效果 057","能听懂小型魔物昆虫简单情绪，无法对话","食用后生效的特殊料理效果。"],["料理效果 058","在水里游动阻力变小","食用后生效的特殊料理效果。"],["料理效果 059","偶尔听到食材魔物的零碎低语，大多是碎片记忆","食用后生效的特殊料理效果。"],["料理效果 060","轻微疼痛感减弱，受伤感知变迟钝","食用后生效的特殊料理效果。"],["料理效果 061","抛出细小藤蔓丝，可轻轻拉扯轻小物品","食用后生效的特殊料理效果。"],["料理效果 062","小火苗、高温热气不容易烫伤皮肤","食用后生效的特殊料理效果。"],["料理效果 063","身上穿戴装备重量感知降低","食用后生效的特殊料理效果。"],["料理效果 064","吃过这道菜，未来一年随时可以回忆起它的味道","食用后生效的特殊料理效果。"],["料理效果 065","在沙土环境，脚印会快速淡化消失","食用后生效的特殊料理效果。"],["料理效果 066","能感知微弱魔力流动","食用后生效的特殊料理效果。"],["料理效果 067","进食后进入安定状态，心率放缓","食用后生效的特殊料理效果。"],["料理效果 068","远距离声音听得更清楚，噪音更容易烦扰你","食用后生效的特殊料理效果。"],["料理效果 069","指尖可以凝结一层薄晶，敲硬物不容易破皮","食用后生效的特殊料理效果。"],["料理效果 070","预判野兽、魔物简单攻击动作","食用后生效的特殊料理效果。"],["料理效果 071","踩泥泞地面不容易陷进去","食用后生效的特殊料理效果。"],["料理效果 072","低智魔物对你好感小幅上升","食用后生效的特殊料理效果。"],["料理效果 073","骨骼震动提醒你即将到来的危险","食用后生效的特殊料理效果。"],["料理效果 074","下落速度轻微放缓","食用后生效的特殊料理效果。"],["料理效果 075","入口食物如果含毒素，舌尖会发麻提醒","食用后生效的特殊料理效果。"],["料理效果 076","哪怕湿身，身体也不容易失温","食用后生效的特殊料理效果。"],["料理效果 077","光线昏暗时影子会微微拉长、自主晃动","食用后生效的特殊料理效果。"],["料理效果 078","短时间爆发力提升，持续结束后乏力","食用后生效的特殊料理效果。"],["料理效果 079","在草丛苔藓区域，气息更难被侦测","食用后生效的特殊料理效果。"],["料理效果 080","呼出空气带着淡淡的料理甜香","食用后生效的特殊料理效果。"],["料理效果 081","手肘膝盖皮肤临时变坚韧，磕碰不痛","食用后生效的特殊料理效果。"],["料理效果 082","加速代谢体内多余杂质","食用后生效的特殊料理效果。"],["料理效果 083","从水里上岸，身上水分快速风干","食用后生效的特殊料理效果。"],["料理效果 084","不容易被幻术轻易扰乱心智","食用后生效的特殊料理效果。"],["料理效果 085","更容易看穿简单幻象伪装","食用后生效的特殊料理效果。"],["料理效果 086","跺脚发出低频震动，吓跑弱小魔物","食用后生效的特殊料理效果。"],["料理效果 087","胃黏膜获得短暂保护，刺激食物不易反胃","食用后生效的特殊料理效果。"],["料理效果 088","入梦时进入平静星海幻境","食用后生效的特殊料理效果。"],["料理效果 089","攀爬岩壁摩擦力增加","食用后生效的特殊料理效果。"],["料理效果 090","敌人很难锁定你的位置，强光下失效","食用后生效的特殊料理效果。"],["料理效果 091","低温环境保护心脏稳定","食用后生效的特殊料理效果。"],["料理效果 092","料理香气可以安抚躁动的小动物/魔物","食用后生效的特殊料理效果。"],["料理效果 093","皮肤短时间更有韧性，不容易被割破小口","食用后生效的特殊料理效果。"],["料理效果 094","记住一种气味后，可以远距离追踪","食用后生效的特殊料理效果。"],["料理效果 095","呼吸声音变小，潜行更安静","食用后生效的特殊料理效果。"],["料理效果 096","短时间耐受温热，怕骤冷刺激","食用后生效的特殊料理效果。"],["料理效果 097","表皮微小破损加速修复","食用后生效的特殊料理效果。"],["料理效果 098","顺风跑步效率提升","食用后生效的特殊料理效果。"],["料理效果 099","轮廓在远处看会轻微模糊，难以精准瞄准","食用后生效的特殊料理效果。"],["料理效果 100","吃下之后，下一次品尝任意魔物料理，额外触发一条随机小buff","食用后生效的特殊料理效果。"]];
-function townOpen(type){const box=document.getElementById('townContent');if(!box)return;const d={shop:'<h3>🛍️ 神秘商店</h3><div class="stat">🕯️ 店主：阿尔德里亚·密斯西里</div><p>「欢迎光临。别问商品从哪里来——只管看看，有没有你命中注定会用上的东西。」</p><p class="muted">神秘商店的商品与交易功能后续开放。</p>',npc:'<h3>⛪ 教堂</h3><div class="stat">✝️ 艾恩斯神父</div><p>「愿旅途中的你仍能保有善意。若感到疲惫，不妨在此稍作休息。」</p>',guild:'<h3>🛡️ 冒险者公会</h3><div class="stat">📜 公会接待员：莉莉娅</div><p>「欢迎来到美食镇冒险者公会！如果你准备好踏上旅途，就先熟悉周围的环境吧。新的委托开放后，我会在这里通知大家。」</p><p>当前暂时没有正式任务，可以办理冒险者相关事务。</p><div class="stat">🏅 冒险者公会徽章：美食镇入会纪念</div>',inn:'<h3>🛏️ 客栈</h3><p>在客栈休息可以恢复行动点。</p><button class="primary" onclick="rest()">休息并恢复到最大 AP</button>'};box.innerHTML=d[type]||d.shop;}
+function townOpen(type){
+  const box=document.getElementById('townContent');if(!box)return;
+  if(type==='shop'){
+    box.innerHTML='<h3>🛍️ 神秘商店</h3><div class="stat">🕯️ 店主：阿尔德里亚·密斯西里</div><p>「想让自己的能力更进一步？这里出售固定属性加点礼包。金币或稀有魔物素材，都可以作为交换。」</p><div id="shopGoods"><p class="muted">正在整理货架……</p></div>';
+    loadShop('mystery');return;
+  }
+  if(type==='npc'){
+    box.innerHTML='<h3>⛪ 教堂</h3><div class="stat">✝️ 艾恩斯神父</div><p>「愿旅途中的你仍能保有善意。若受了伤，就带些恢复药剂上路吧。」</p><div id="churchGoods"><p class="muted">正在准备恢复药剂……</p></div>';
+    loadShop('potions');return;
+  }
+  if(type==='guild'){
+    box.innerHTML='<h3>🛡️ 冒险者公会</h3><div class="stat">📜 公会会长：莉莉娅会长</div><p>「欢迎来到美食镇冒险者公会！我会为你准备适合已探索地区的武器与防具。新的委托开放后，也会在这里通知大家。」</p><div class="stat">🏅 冒险者公会徽章：美食镇入会纪念</div><div id="guildGoods"><p class="muted">正在整理装备……</p></div>';
+    loadShop('gear');return;
+  }
+  const d={inn:'<h3>🛏️ 客栈</h3><p>在客栈休息可以恢复行动点。</p><button class="primary" onclick="rest()">休息并恢复到最大 AP</button>'};
+  box.innerHTML=d[type]||'<p>请选择美食镇设施。</p>';
+}
+
+// ================= 商店与装备系统（使用现有 inventory/adventurers 表，不新增数据库字段） =================
+const SHOP_POTIONS=[
+  {name:'小型恢复药剂',price:10,heal:20,desc:'恢复最多 20 HP。'},
+  {name:'中型恢复药剂',price:25,heal:50,desc:'恢复最多 50 HP。'},
+  {name:'大型恢复药剂',price:50,heal:100,desc:'恢复最多 100 HP。'}
+];
+// 固定属性礼包：每包固定提升对应的一项基础属性 +2；金币或任意一种稀有魔物素材均可购买。
+const ATTRIBUTE_PACKS=[
+  {key:'technique',name:'技巧加点礼包',stat:'技巧',amount:2,price:80,desc:'技巧 +2，提升攻击相关能力。'},
+  {key:'endurance',name:'耐力加点礼包',stat:'耐力',amount:2,price:80,desc:'耐力 +2，提升生存与承伤能力。'},
+  {key:'taste',name:'味觉加点礼包',stat:'味觉',amount:2,price:80,desc:'味觉 +2，强化味觉相关战斗效果。'},
+  {key:'magic_sense',name:'魔力感知加点礼包',stat:'魔力感知',amount:2,price:80,desc:'魔力感知 +2，强化感知与分析能力。'},
+  {key:'smell',name:'嗅觉加点礼包',stat:'嗅觉',amount:2,price:80,desc:'嗅觉 +2，强化嗅觉相关检定。'},
+  {key:'proficiency',name:'熟练度加点礼包',stat:'熟练度',amount:2,price:80,desc:'熟练度 +2，提升熟练度相关能力。'}
+];
+const EQUIPMENT_CATALOG=[
+  {name:'铁制短剑',map:'美食镇',slot:'weapon',attack:2,defense:0,price:40,desc:'新手用的可靠短剑。'},
+  {name:'冒险者长刀',map:'美食镇',slot:'weapon',attack:3,defense:0,price:70,desc:'适合刚开始狩猎的冒险者。'},
+  {name:'皮革护甲',map:'美食镇',slot:'armor',attack:0,defense:1,price:35,desc:'轻便的基础护甲。'},
+  {name:'轻型护腕',map:'美食镇',slot:'armor',attack:0,defense:2,price:55,desc:'保护手臂与关节。'},
+  {name:'毒藤短刃',map:'幽毒雨林',slot:'weapon',attack:4,defense:0,price:90,desc:'以雨林坚韧毒藤制成的短刃。'},
+  {name:'腐蚀长枪',map:'幽毒雨林',slot:'weapon',attack:5,defense:0,price:130,desc:'枪尖经过特殊处理。'},
+  {name:'藤甲',map:'幽毒雨林',slot:'armor',attack:0,defense:3,price:80,desc:'以韧性藤材编制的护甲。'},
+  {name:'抗毒披肩',map:'幽毒雨林',slot:'armor',attack:0,defense:4,price:120,desc:'厚实披肩，可提供额外防护。'},
+  {name:'猎兽弯刀',map:'獠牙原野',slot:'weapon',attack:6,defense:0,price:160,desc:'为追猎凶猛原野魔物打造。'},
+  {name:'獠牙战矛',map:'獠牙原野',slot:'weapon',attack:7,defense:0,price:220,desc:'沉稳有力的长柄武器。'},
+  {name:'兽皮战甲',map:'獠牙原野',slot:'armor',attack:0,defense:5,price:140,desc:'厚实兽皮提供可靠保护。'},
+  {name:'猎手护腿',map:'獠牙原野',slot:'armor',attack:0,defense:6,price:200,desc:'方便行动的狩猎护具。'},
+  {name:'熔岩大剑',map:'炎狱山岭',slot:'weapon',attack:8,defense:0,price:260,desc:'经高温锻造的沉重巨剑。'},
+  {name:'黑曜石长枪',map:'炎狱山岭',slot:'weapon',attack:9,defense:0,price:350,desc:'锋锐的黑曜石枪刃。'},
+  {name:'熔岩鳞甲',map:'炎狱山岭',slot:'armor',attack:0,defense:7,price:230,desc:'层叠鳞片组成的防具。'},
+  {name:'耐热护手',map:'炎狱山岭',slot:'armor',attack:0,defense:8,price:320,desc:'厚重护手，兼顾防护与握持。'},
+  {name:'霜晶长剑',map:'霜牙荒原',slot:'weapon',attack:10,defense:0,price:400,desc:'以霜晶锻成的长剑。'},
+  {name:'寒牙重斧',map:'霜牙荒原',slot:'weapon',attack:11,defense:0,price:520,desc:'适合对付高防御魔物的重斧。'},
+  {name:'霜纹重甲',map:'霜牙荒原',slot:'armor',attack:0,defense:9,price:360,desc:'霜纹金属与厚衬制成的重甲。'},
+  {name:'雪原斗篷',map:'霜牙荒原',slot:'armor',attack:0,defense:10,price:470,desc:'厚实斗篷式防具。'},
+  {name:'深海三叉戟',map:'魔潮深海',slot:'weapon',attack:12,defense:0,price:600,desc:'适合深海狩猎的三叉戟。'},
+  {name:'潮汐晶刃',map:'魔潮深海',slot:'weapon',attack:14,defense:0,price:800,desc:'蕴含潮汐魔力的晶刃。'},
+  {name:'深渊鳞甲',map:'魔潮深海',slot:'armor',attack:0,defense:11,price:540,desc:'以深海鳞片编制的防具。'},
+  {name:'潮汐护肩',map:'魔潮深海',slot:'armor',attack:0,defense:12,price:720,desc:'坚固的肩部护具。'}
+];
+function equipmentMarker(e,equipped=false){return `MZ_EQUIP|${e.slot}|${Number(e.attack)||0}|${Number(e.defense)||0}|${equipped?'1':'0'}`;}
+function parseEquipmentMeta(item){
+  const raw=String(item?.item_desc||'');if(!raw.startsWith('MZ_EQUIP|'))return null;
+  const a=raw.split('|');return {slot:a[1]==='weapon'?'weapon':'armor',attack:Number(a[2])||0,defense:Number(a[3])||0,equipped:a[4]==='1'};
+}
+function displayItemDescription(item){const e=parseEquipmentMeta(item);if(e)return `${e.slot==='weapon'?'武器':'防具'}装备数据`;const p=String(item?.item_desc||'');if(p.startsWith('MZ_POTION|'))return SHOP_POTIONS.find(x=>x.name===item.item_name)?.desc||'恢复药剂';return p;}
+async function playerUnlockedMapNames(){
+  const set=new Set(DEFAULT_UNLOCKED_MAPS);
+  const {data,error}=await db.from('player_unlocked_maps').select('map_name').eq('user_id',currentUser.id);
+  if(!error)(data||[]).forEach(x=>set.add(x.map_name));
+  return set;
+}
+async function loadShop(kind='mystery'){
+  const boxId=kind==='gear'?'guildGoods':kind==='potions'?'churchGoods':'shopGoods';
+  const box=document.getElementById(boxId);if(!box||!currentUser)return;
+  box.innerHTML='<p class="muted">正在读取金币、背包与可用素材……</p>';
+  await loadAdventurer();
+  if(!currentAdventurer){box.innerHTML='<p class="err">请先创建冒险者档案。</p>';return;}
+  const unlocked=await playerUnlockedMapNames();
+  const {data:inv,error:invErr}=await db.from('inventory').select('*').eq('player_id',currentUser.id).order('id',{ascending:true});
+  if(invErr){box.innerHTML='<p class="err">读取背包失败：'+escapeHtml(invErr.message)+'</p>';return;}
+  const {data:drops}=await db.from('monster_drops').select('item_name,is_rare');
+  const rareNames=new Set((drops||[]).filter(x=>x.is_rare).map(x=>x.item_name));
+  const gearNames=new Set(EQUIPMENT_CATALOG.map(x=>x.name));
+  if(kind==='potions'){
+    const potions=SHOP_POTIONS.map(x=>`<div class="inventoryItem"><b>🧪 ${escapeHtml(x.name)}</b><span class="badge">${x.price} 金币</span><p>${escapeHtml(x.desc)}</p><button class="primary" onclick="buyShopItem('${escapeJs(x.name)}')">购买</button></div>`).join('');
+    box.innerHTML=`<div class="stat">💰 当前金币：${Number(currentAdventurer.coins)||0}</div><h4>🧪 艾恩斯神父的恢复药剂</h4><p class="small muted">药剂会存入背包，战斗中可使用；恢复量不会超过最大 HP。</p>${potions}`;return;
+  }
+  if(kind==='gear'){
+    const gear=EQUIPMENT_CATALOG.filter(x=>unlocked.has(x.map)).map(x=>`<div class="inventoryItem"><b>${x.slot==='weapon'?'🗡️':'🛡️'} ${escapeHtml(x.name)}</b><span class="badge">${x.price} 金币</span><p class="muted">地图：${escapeHtml(x.map)}｜${x.slot==='weapon'?'攻击':'防御'}加成 +${x.slot==='weapon'?x.attack:x.defense}</p><p>${escapeHtml(x.desc)}</p><button class="primary" onclick="buyShopItem('${escapeJs(x.name)}')">购买</button></div>`).join('');
+    box.innerHTML=`<div class="stat">💰 当前金币：${Number(currentAdventurer.coins)||0}</div><h4>⚔️ 莉莉娅会长的装备货架</h4><p class="small muted">只显示已解锁地图对应的装备。购买后进入背包，在装备栏穿戴才会生效。</p>${gear||'<p class="muted">暂无可购买的地图装备。</p>'}`;return;
+  }
+  const packs=ATTRIBUTE_PACKS.map(x=>`<div class="inventoryItem"><b>✨ ${escapeHtml(x.name)}</b><span class="badge">固定提升：${escapeHtml(x.stat)} +${x.amount}</span><p>${escapeHtml(x.desc)}</p><p class="muted">支付方式任选其一：${x.price} 金币，或 1 份特殊材料（标记为稀有的魔物掉落物）。</p><button class="primary" onclick="buyAttributePack('${x.key}','coins')">用 ${x.price} 金币购买</button> <button class="secondary" onclick="buyAttributePack('${x.key}','material')">用 1 份特殊材料购买</button></div>`).join('');
+  const mats=(inv||[]).filter(x=>getItemCount(x)>0&&rareNames.has(x.item_name)&&!gearNames.has(x.item_name)&&!SHOP_POTIONS.some(p=>p.name===x.item_name));
+  const sellingPool=(inv||[]).filter(x=>getItemCount(x)>0&&!gearNames.has(x.item_name)&&!SHOP_POTIONS.some(p=>p.name===x.item_name)&&!ATTRIBUTE_PACKS.some(a=>a.name===x.item_name));
+  const selling=sellingPool.length?sellingPool.map(x=>{const price=rareNames.has(x.item_name)?20:5;return `<div class="inventoryItem"><span class="badge">×${getItemCount(x)}</span><b>🧺 ${escapeHtml(x.item_name)}</b><p class="muted">${rareNames.has(x.item_name)?'特殊/稀有素材':'普通素材'}｜每份回收 ${price} 金币</p><button class="secondary" onclick="sellMaterial('${escapeJs(x.id)}',1)">出售 1 份</button> <button class="secondary" onclick="sellMaterial('${escapeJs(x.id)}',${getItemCount(x)})">全部出售</button></div>`;}).join(''):'<p class="muted">背包里暂时没有可出售的素材。</p>';
+  box.innerHTML=`<div class="stat">💰 当前金币：${Number(currentAdventurer.coins)||0}</div><h4>✨ 阿尔德里亚·密斯西里的固定属性礼包</h4><p class="small muted">每个礼包固定提升一项属性 +2，不需要随机抽取。特殊材料指掉落表中标记为稀有的魔物素材；背包里至少有 1 份此类素材即可选择材料支付。</p>${packs}<h4>🧺 素材回收</h4><p class="small muted">普通素材 5 金币/份；特殊/稀有素材 20 金币/份。装备与恢复药剂不能出售。</p>${selling}`;
+}
+async function buyAttributePack(key,currency='coins'){
+  if(!currentUser||!currentAdventurer)return;
+  const pack=ATTRIBUTE_PACKS.find(x=>x.key===key);if(!pack){alert('没有找到这个属性礼包。');return;}
+  const lockKey='attribute-'+key+'-'+currency;if(window[lockKey])return;window[lockKey]=true;
+  try{
+    const {data:inv,error:invError}=await db.from('inventory').select('*').eq('player_id',currentUser.id).order('id',{ascending:true});
+    if(invError){alert('读取背包失败：'+invError.message);return;}
+    let materialRow=null;
+    if(currency==='material'){
+      const {data:drops,error:dropsError}=await db.from('monster_drops').select('item_name,is_rare');
+      if(dropsError){alert('读取特殊材料清单失败：'+dropsError.message);return;}
+      const rareNames=new Set((drops||[]).filter(x=>x.is_rare).map(x=>x.item_name));
+      materialRow=(inv||[]).find(x=>getItemCount(x)>0&&rareNames.has(x.item_name)&&!parseEquipmentMeta(x)&&!SHOP_POTIONS.some(p=>p.name===x.item_name));
+      if(!materialRow){alert('你没有可用于兑换的特殊材料。请先狩猎获得标记为稀有的魔物掉落物。');return;}
+    }else if(currency==='coins'){
+      const coins=Number(currentAdventurer.coins)||0;if(coins<pack.price){alert(`金币不足！购买需要 ${pack.price} 金币，你目前有 ${coins}。`);return;}
+    }else{alert('不支持的支付方式。');return;}
+    const statKeys=['technique','endurance','taste','magic_sense','smell','proficiency'];
+    if(!statKeys.includes(pack.key)){alert('属性礼包配置有误，已取消购买。');return;}
+    // 先支付，再增加属性；任一步失败都会尽量回滚，使用现有列，不改表结构。
+    let oldCoins=Number(currentAdventurer.coins)||0;
+    if(currency==='coins'){
+      const {data:paid,error:payError}=await db.from('adventurers').update({coins:oldCoins-pack.price}).eq('user_id',currentUser.id).select().single();
+      if(payError||!paid){alert('金币扣款失败：'+(payError?.message||'未返回玩家资料'));return;}currentAdventurer=paid;
+    }else{
+      const count=getItemCount(materialRow);const {error:matError}=await db.from('inventory').update({item_count:count-1}).eq('id',materialRow.id).eq('player_id',currentUser.id);
+      if(matError){alert('特殊材料扣除失败：'+matError.message);return;}
+    }
+    const oldValue=Number(currentAdventurer[pack.key])||0;
+    const {data:updated,error:updateError}=await db.from('adventurers').update({[pack.key]:oldValue+pack.amount}).eq('user_id',currentUser.id).select().single();
+    if(updateError||!updated){
+      if(currency==='coins'){const refund=await db.from('adventurers').update({coins:oldCoins}).eq('user_id',currentUser.id).select().single();if(refund.data)currentAdventurer=refund.data;}
+      else await db.from('inventory').update({item_count:getItemCount(materialRow)}).eq('id',materialRow.id).eq('player_id',currentUser.id);
+      alert('属性增加失败，已尝试退还支付：'+(updateError?.message||'未返回玩家资料'));return;
+    }
+    currentAdventurer=updated;alert(`购买成功！${pack.stat} +${pack.amount}。`);await loadPanel();await loadShop('mystery');
+  }finally{window[lockKey]=false;}
+}
+async function buyShopItem(name){
+  if(!currentUser||!currentAdventurer)return;
+  const potion=SHOP_POTIONS.find(x=>x.name===name),gear=EQUIPMENT_CATALOG.find(x=>x.name===name);
+  const item=potion||gear;if(!item){alert('没有找到该商品。');return;}
+  if(gear){const unlocked=await playerUnlockedMapNames();if(!unlocked.has(gear.map)){alert('需要先解锁地图「'+gear.map+'」才能购买这件装备。');return;}}
+  const coins=Number(currentAdventurer.coins)||0;if(coins<item.price){alert(`金币不足！需要 ${item.price}，你目前有 ${coins}。`);return;}
+  const buttonKey='buy-'+name;if(window[buttonKey])return;window[buttonKey]=true;
+  try{
+    const {data:updated,error:coinError}=await db.from('adventurers').update({coins:coins-item.price}).eq('user_id',currentUser.id).select().single();
+    if(coinError||!updated){alert('扣款失败：'+(coinError?.message||'未返回玩家资料'));return;}
+    currentAdventurer=updated;
+    let writeError=null;
+    const {data:existing,error:readError}=await db.from('inventory').select('id,item_count,item_desc').eq('player_id',currentUser.id).eq('item_name',name).limit(1);
+    if(readError)writeError=readError;
+    else if(existing?.length){
+      const row=existing[0];const nextDesc=gear?(String(row.item_desc||'').startsWith('MZ_EQUIP|')?row.item_desc:equipmentMarker(gear,false)):(String(row.item_desc||'').startsWith('MZ_POTION|')?row.item_desc:`MZ_POTION|${potion.heal}`);
+      const upd=await db.from('inventory').update({item_count:Math.max(0,Number(row.item_count)||0)+1,item_desc:nextDesc}).eq('id',row.id).eq('player_id',currentUser.id);writeError=upd.error;
+    }else{
+      const ins=await db.from('inventory').insert({player_id:currentUser.id,item_name:name,item_desc:gear?equipmentMarker(gear,false):`MZ_POTION|${potion.heal}`,item_count:1});writeError=ins.error;
+    }
+    if(writeError){
+      const refund=await db.from('adventurers').update({coins:coins}).eq('user_id',currentUser.id).select().single();if(refund.data)currentAdventurer=refund.data;
+      alert('购买写入背包失败，已尝试退还金币：'+writeError.message);return;
+    }
+    alert('购买成功：'+name+'！');await loadPanel();await loadShop('gear');await loadShop('potions');await loadShop('mystery');
+  }finally{window[buttonKey]=false;}
+}
+async function sellMaterial(id,quantity){
+  if(!currentUser||!currentAdventurer)return;
+  const {data:item,error}=await db.from('inventory').select('*').eq('id',id).eq('player_id',currentUser.id).maybeSingle();
+  if(error||!item){alert('读取素材失败：'+(error?.message||'物品不存在'));return;}
+  if(parseEquipmentMeta(item)||SHOP_POTIONS.some(x=>x.name===item.item_name)||ATTRIBUTE_PACKS.some(x=>x.name===item.item_name)){alert('装备、恢复药剂与属性礼包不能出售。');return;}
+  const count=getItemCount(item),qty=Math.max(1,Math.min(count,Number(quantity)||1));if(qty<1){alert('没有可出售的数量。');return;}
+  const {data:drops}=await db.from('monster_drops').select('item_name,is_rare').eq('item_name',item.item_name).limit(1);
+  const price=drops?.[0]?.is_rare?20:5;const total=price*qty;
+  const {error:updateError}=await db.from('inventory').update({item_count:count-qty}).eq('id',id).eq('player_id',currentUser.id);
+  if(updateError){alert('出售失败：'+updateError.message);return;}
+  const coins=(Number(currentAdventurer.coins)||0)+total;
+  const {data:updated,error:coinError}=await db.from('adventurers').update({coins}).eq('user_id',currentUser.id).select().single();
+  if(coinError||!updated){await db.from('inventory').update({item_count:count}).eq('id',id).eq('player_id',currentUser.id);alert('金币入账失败，素材数量已尝试恢复：'+(coinError?.message||'未知错误'));return;}
+  currentAdventurer=updated;alert(`出售成功：${item.item_name} ×${qty}，获得 ${total} 金币。`);await loadInventory();await loadEquipment();await loadShop();await loadPanel();
+}
+async function getInventoryRows(){const {data,error}=await db.from('inventory').select('*').eq('player_id',currentUser.id).order('id',{ascending:true});if(error)throw error;return (data||[]).filter(x=>getItemCount(x)>0);}
+async function getEquippedBonuses(){
+  const result={attack:0,defense:0,weaponName:'未装备',armorName:'未装备'};if(!currentUser)return result;
+  try{const rows=await getInventoryRows();for(const row of rows){const e=parseEquipmentMeta(row);if(!e||!e.equipped)continue;if(e.slot==='weapon'&&!result.attack){result.attack=e.attack;result.weaponName=row.item_name;}else if(e.slot==='armor'&&!result.defense){result.defense=e.defense;result.armorName=row.item_name;}}}catch(e){console.warn('读取装备加成失败',e);}return result;
+}
+async function equipItem(id){
+  const rows=await getInventoryRows();const selected=rows.find(x=>String(x.id)===String(id));const meta=parseEquipmentMeta(selected);if(!selected||!meta){alert('找不到这件装备。');return;}
+  for(const row of rows){const e=parseEquipmentMeta(row);if(!e||e.slot!==meta.slot)continue;const next=equipmentMarker({slot:e.slot,attack:e.attack,defense:e.defense},String(row.id)===String(id));if(row.item_desc!==next){const {error}=await db.from('inventory').update({item_desc:next}).eq('id',row.id).eq('player_id',currentUser.id);if(error){alert('装备穿戴失败：'+error.message);return;}}}
+  await loadEquipment();await loadInventory();await loadPanel();
+}
+async function unequipItem(id){const rows=await getInventoryRows();const row=rows.find(x=>String(x.id)===String(id));const e=parseEquipmentMeta(row);if(!row||!e)return;const {error}=await db.from('inventory').update({item_desc:equipmentMarker({slot:e.slot,attack:e.attack,defense:e.defense},false)}).eq('id',id).eq('player_id',currentUser.id);if(error){alert('卸下失败：'+error.message);return;}await loadEquipment();await loadInventory();await loadPanel();}
+async function loadEquipment(){
+  const summary=document.getElementById('equippedSummary'),box=document.getElementById('equipmentInventory');if(!summary||!box||!currentUser)return;
+  summary.textContent='正在读取装备……';box.innerHTML='';
+  try{const rows=await getInventoryRows();const bonus=await getEquippedBonuses();summary.innerHTML=`<b>🗡️ 武器：</b>${escapeHtml(bonus.weaponName)}（攻击 +${bonus.attack}）<br><b>🛡️ 防具：</b>${escapeHtml(bonus.armorName)}（防御 +${bonus.defense}）<p class="small muted">武器攻击加成计入攻击伤害；防具在耐力减伤后继续降低受到的伤害，最低伤害为 1。</p>`;
+    const gears=rows.filter(x=>parseEquipmentMeta(x));box.innerHTML=gears.length?gears.map(x=>{const e=parseEquipmentMeta(x);return `<div class="inventoryItem"><span class="badge">×${getItemCount(x)}</span><b>${e.slot==='weapon'?'🗡️':'🛡️'} ${escapeHtml(x.item_name)}</b><p class="muted">${e.slot==='weapon'?'攻击':'防御'}加成 +${e.slot==='weapon'?e.attack:e.defense}｜${e.equipped?'已装备':'未装备'}</p><button class="${e.equipped?'secondary':'primary'}" onclick="${e.equipped?`unequipItem('${escapeJs(x.id)}')`:`equipItem('${escapeJs(x.id)}')`}">${e.equipped?'卸下':'穿戴'}</button></div>`;}).join(''):'<p class="muted">还没有装备。前往美食镇的冒险者公会找莉莉娅会长购买吧。</p>';
+  }catch(e){summary.innerHTML='<p class="err">读取装备失败：'+escapeHtml(e.message)+'</p>';}
+}
+
 function drawFoodBuff(){const b=FOOD_BUFF_POOL[Math.floor(Math.random()*FOOD_BUFF_POOL.length)];document.getElementById('drawBuffResult').innerHTML='<b>🎉 抽到了：'+escapeHtml(b[0])+'</b><br>'+escapeHtml(b[1])+'<br><span class="small muted">'+escapeHtml(b[2])+'</span>';}
 function buffKey(){return currentUser?'mystery_recipe_buffs_'+currentUser.id:'mystery_recipe_buffs_guest';}
 function getCustomBuffs(){try{return JSON.parse(localStorage.getItem(buffKey())||'[]')}catch(e){return [];}}
