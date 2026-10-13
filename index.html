@@ -192,20 +192,20 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
       <div class="card">
         <h2>🗺️ 冒险地图</h2>
         <p id="huntStatus" class="muted">正在读取地图……</p>
-        <p class="small muted">提示：初始开放【美食镇】和【幽毒雨林】，其他地图需要玩家提交料理并由管理员审核解锁！</p>
+        <p class="small muted">提示：初始开放【美食镇】和【幽毒雨林】，其他地图需要玩家提交料理并由 GM 审核解锁！</p>
         <div id="maps"></div>
       </div>
     </div>
 
-    <!-- 7. 管理员专属后台 -->
+    <!-- 7. GM 管理员专属后台 -->
     <div id="adminSection" class="section">
       <div class="card" style="border:2px solid #b3261e;">
-        <h2>👑 管理员控制台</h2>
-        <p class="muted">独立的  工作区：审核料理、给指定玩家解锁地图、修改玩家数据，以及管理自己的  角色数据。</p>
+        <h2>👑 GM 管理员控制台</h2>
+        <p class="muted">独立的 GM 工作区：审核料理、给指定玩家解锁地图、修改玩家数据，以及管理自己的 GM 角色数据。</p>
         <div class="adminTabs">
           <button id="adminTabRecipes" class="adminTab active" onclick="showAdminPane('recipes')">🍳 料理审核</button>
           <button id="adminTabPlayers" class="adminTab" onclick="showAdminPane('players')">👥 玩家管理</button>
-          <button id="adminTabSelf" class="adminTab" onclick="showAdminPane('self')">👑 我的 管理员 数据</button>
+          <button id="adminTabSelf" class="adminTab" onclick="showAdminPane('self')">👑 我的 GM 数据</button>
           <button id="adminTabMaps" class="adminTab" onclick="showAdminPane('maps')">🗺️ 地图管理</button>
         </div>
       </div>
@@ -256,8 +256,8 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
 
       <div id="adminPaneSelf" class="adminPane">
         <div class="card">
-          <h3>👑 我的 管理员角色数据</h3>
-          <p class="muted">这是当前登录 管理员自己的角色资料，不需要在玩家列表里寻找自己。</p>
+          <h3>👑 我的 GM 角色数据</h3>
+          <p class="muted">这是当前登录 GM 自己的角色资料，不需要在玩家列表里寻找自己。</p>
           <div class="grid">
             <div><label>角色名字：</label><input id="self_name" type="text"></div>
             <div><label>年龄：</label><input id="self_age" type="number" min="1"></div>
@@ -278,7 +278,7 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
           </div>
           <br>
           <div class="row">
-            <button class="primary" onclick="saveAdminSelfData()">💾 保存我的 管理员 数据</button>
+            <button class="primary" onclick="saveAdminSelfData()">💾 保存我的 GM 数据</button>
             <button class="secondary" onclick="setSelfInfiniteAP()">⚡ 我的 AP 设为 9999</button>
             <button class="secondary" onclick="loadAdminSelfData()">🔄 重新读取</button>
           </div>
@@ -315,8 +315,8 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
   <button id="navBuff" class="navbtn" onclick="showSection('buff')">🍲 美食 Buff</button>
   <button id="navRecipe" class="navbtn" onclick="showSection('recipe')">🍳 提交料理</button>
 
-  <!-- 管理员后台入口，仅授权账号可见 -->
-  <button id="navAdmin" class="navbtn adminNav" style="display:none;" onclick="showSection('admin')">👑 后台设置</button>
+  <!-- GM管理员后台入口，仅授权账号可见 -->
+  <button id="navAdmin" class="navbtn adminNav" style="display:none;" onclick="showSection('admin')">👑 GM后台设置</button>
 
   <hr>
   <button class="navbtn" onclick="closeSide()">✕ 关闭菜单</button>
@@ -393,8 +393,6 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
     <div id="battleLog" class="battleLog"></div>
     <div id="battleActions" class="battleActions">
       <button class="primary" onclick="battleAction('attack')">🗡️ 攻击</button>
-      <button class="secondary" onclick="battleAction('defend')">🛡️ 防御</button>
-      <button class="secondary" onclick="battleAction('potion')">🧪 吃血药</button>
       <button class="secondary" onclick="battleAction('sense')">✨ 感知弱点</button>
       <button class="secondary" onclick="battleAction('run')">🏃 逃跑</button>
     </div>
@@ -465,7 +463,7 @@ const SUPABASE_KEY="sb_publishable_0FU46ikX3BapZYxXDRVKrA_K5jLe2K0";
 const db=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 
 /* -------------------------------------------------------------
-   👑 管理员邮箱配置 (在此填入允许开启 管理员 后台的账号邮箱)
+   👑 管理员邮箱配置 (在此填入允许开启 GM 后台的账号邮箱)
    ------------------------------------------------------------- */
 const ADMIN_EMAILS = []; // 管理员现在由 Supabase 的 admins 表控制；此数组仅保留兼容，不再用于授权。
 
@@ -478,7 +476,7 @@ let maps=[];
 let monsters=[];
 let selectedMap=null;
 let selectedMonster=null;
-let allAdventurersList=[]; // 管理员控制台用
+let allAdventurersList=[]; // 管理员GM控制台用
 let currentIsAdmin=false;
 let currentAdminRole=null;
 
@@ -627,7 +625,7 @@ async function loadGame(userArg=null){
     document.getElementById("who").textContent="👋 "+nickname;
     document.getElementById("sideName").textContent="当前玩家："+nickname;
 
-    // 管理员判断与界面显示
+    // GM判断与界面显示
     const adminNavBtn = document.getElementById("navAdmin");
     if(isAdmin()){
       adminNavBtn.style.display="block";
@@ -796,7 +794,7 @@ async function loadBestiary(){
     return;
   }
   if(!rows || !rows.length){
-    listEl.innerHTML = "<p class='muted'>魔物图鉴暂时为空，等待 管理员 配置地区魔物。</p>";
+    listEl.innerHTML = "<p class='muted'>魔物图鉴暂时为空，等待 GM 配置地区魔物。</p>";
     return;
   }
   const ids=rows.map(m=>m.id);
@@ -918,7 +916,7 @@ async function loadHuntData(){
     m.isLocked = !(DEFAULT_UNLOCKED_MAPS.includes(name) || serverUnlocked.includes(name) || aliases.some(n => DEFAULT_UNLOCKED_MAPS.includes(n) || serverUnlocked.includes(n)));
   });
 
-  status.textContent="点击解开锁定的地图进入该区域。未解锁地图需提交料理并经 管理员 审核。";
+  status.textContent="点击解开锁定的地图进入该区域。未解锁地图需提交料理并经 GM 审核。";
   renderMaps();
 }
 
@@ -978,7 +976,7 @@ async function selectMap(id){
     monsters = [];
   }
   if (!monsters.length) {
-    document.getElementById("huntModalMsg").textContent = "这个地区暂时没有配置可遭遇的魔物，请联系 管理员。";
+    document.getElementById("huntModalMsg").textContent = "这个地区暂时没有配置可遭遇的魔物，请联系 GM。";
     document.getElementById("encounters").innerHTML = "<p class='muted'>本地区暂无魔物配置。配置完成后即可狩猎。</p>";
     document.getElementById("encounterStartBtn").disabled = true;
     return;
@@ -1019,12 +1017,13 @@ function hashId(v){let n=0;for(const c of String(v)){n=(n*31+c.charCodeAt(0))%99
 
 function buildMonsterStats(m,map){
   const danger=Math.max(0,mapDanger(map));
-  const level=Math.max(1,Number(m.level)||Math.max(1,danger+1+(hashId(m.id)%3)));
+  const level=Math.max(1,Number(m.level)||Math.max(1,danger+1+(hashId(m.id)%2)));
+  // 六区难度：美食镇 1-2 级起步，后续地区逐步上升；用较平缓的曲线避免新手被秒杀。
   return {
     level,
-    maxHp:Math.max(1,Number(m.hp)|| (50+level*18+(hashId(m.id)%16))),
-    attack: Number(m.atk)|| (7+level*3+(hashId(m.id)%5)),
-    defense: Number(m.def)|| (3+Math.floor(level*1.5)),
+    maxHp:Math.max(1,Number(m.hp)|| (28+level*12+(hashId(m.id)%8))),
+    attack: Number(m.atk)|| (4+level*2),
+    defense: Number(m.def)|| (2+level),
     speed: 5+level+(hashId(m.id)%4)
   };
 }
@@ -1252,7 +1251,7 @@ async function startBattle(){
     addBattleLog("🗺️ 已进入战斗。",true);
   }
   addBattleLog("⚡ 进入战斗，已消耗 1 AP；逃跑不会返还 AP。",true);
-  addBattleLog("🎲 规则：你行动一次 → 魔物行动一次。魔物攻击时由你选择闪避、防御、吃血药或逃跑。",true);
+  addBattleLog("🎲 规则：你的回合可攻击、感知弱点或逃跑；随后魔物发动攻击，你选择闪避、防御、吃血药或逃跑。",true);
 }
 
 function addBattleLog(text,important=false){
@@ -1292,7 +1291,8 @@ async function battleAction(action){
   const p=battle.player,m=battle.monster,coop=battle.coopBonus||0;
 
   if(action==="attack"){
-    const r=rollCheck("技巧攻击",p.technique,10+m.defense,coop);
+    const attackTarget=10+Math.floor(m.defense/2);
+    const r=rollCheck("技巧攻击",p.technique,attackTarget,coop);
     if(r.fumble) addBattleLog("💥 大失败！你失去平衡，本回合攻击落空。");
     else if(r.success){
       let dmg=rollDamage(p.attack+(r.crit?4:0)+coop);
@@ -1360,13 +1360,13 @@ async function monsterTurn(){
   battle.awaitingDodge=true;
   const m=battle.monster;
   const raw=d20();
-  const target=10+m.attack;
+  const target=10+Math.floor(m.attack/3);
   battle.pendingDodge={raw,target,monsterAttack:m.attack};
   setBattleTurn("monster");
   document.getElementById("dodgeModalBack").classList.add("show");
   document.getElementById("dodgeBtn").disabled=false;
   document.getElementById("dodgeRollInfo").textContent=`👾 ${monsterName(selectedMonster)} 的攻击骰已经投出：D20(${raw})\n\n请选择你要怎么应对这次攻击。`;
-  document.getElementById("dodgeDesc").textContent=`魔物攻击力：${m.attack}　你的选择：闪避 / 防御 / 吃血药 / 逃跑`;
+  document.getElementById("dodgeDesc").textContent=`魔物攻击力：${m.attack}　闪避目标：${target}　你的选择：闪避 / 防御 / 吃血药 / 逃跑`;
   document.getElementById("dodgeLog").innerHTML=(battle.log||[]).map(x=>"<div>"+escapeHtml(x)+"</div>").join("");
 }
 
@@ -1379,20 +1379,26 @@ async function useBattlePotion(){
   if(error){addBattleLog("❌ 无法读取背包，暂时不能使用血药。",true);return false;}
   const item=(data||[]).find(x=>getItemCount(x)>0&&/(血药|回复药|治疗药|生命药|恢复药)/.test(x.item_name||""));
   if(!item){addBattleLog("🧪 背包里没有可用的血药。");return false;}
+  // 满血时不扣除道具，也不消耗本次行动。
+  if(battle.playerHp>=battle.player.maxHp){
+    addBattleLog("🧪 当前 HP 已满，不需要使用血药；道具未消耗，本次行动不结束。",true);
+    return false;
+  }
   const oldCount=getItemCount(item);
   const newCount=Math.max(0,oldCount-1);
   const {error:updateError}=await db.from("inventory").update({item_count:newCount}).eq("id",item.id).eq("player_id",currentUser.id);
   if(updateError){addBattleLog("❌ 血药使用失败："+updateError.message,true);return false;}
   const heal=Math.min(30,battle.player.maxHp-battle.playerHp);
   battle.playerHp=Math.min(battle.player.maxHp,battle.playerHp+30);
-  addBattleLog(heal>0?`🧪 你使用「${item.item_name}」，恢复 ${heal} HP。`:`🧪 你使用「${item.item_name}」，但当前 HP 已满。`);
+  addBattleLog(`🧪 你使用「${item.item_name}」，恢复 ${heal} HP。`);
   return true;
 }
 
 async function attemptRun(source){
   if(!battle||battle.ended)return;
   const p=battle.player,m=battle.monster;
-  const r=rollCheck("嗅觉·逃跑",p.smell,12+m.level,battle.coopBonus||0);
+  const runTarget=10+Math.floor(m.level/2);
+  const r=rollCheck("嗅觉·逃跑",p.smell,runTarget,battle.coopBonus||0);
   if(r.success){
     battle.ended=true;
     battle.escaped=true;
@@ -1440,10 +1446,11 @@ async function resolveMonsterResponse(action){
   }
   if(action==="dodge"){
     const p=battle.player,pending=battle.pendingDodge;
+    const raw=d20();
     const mod=statMod(p.smell);
-    const total=pending.raw+mod+(battle.coopBonus||0);
-    const success=pending.raw===20||(pending.raw!==1&&total>=pending.target);
-    addBattleLog(`💨 闪避判定：D20(${pending.raw}) + 嗅觉修正(${mod})${battle.coopBonus?` + 协作(${battle.coopBonus})`:""} = ${total}，目标 ${pending.target}`);
+    const total=raw+mod+(battle.coopBonus||0);
+    const success=raw===20||(raw!==1&&total>=pending.target);
+    addBattleLog(`💨 闪避判定：D20(${raw}) + 嗅觉修正(${mod})${battle.coopBonus?` + 协作(${battle.coopBonus})`:""} = ${total}，目标 ${pending.target}`);
     if(success){
       addBattleLog("💨 闪避成功！你完全避开了魔物攻击。",true);
       await endMonsterTurn();
@@ -1457,7 +1464,7 @@ async function resolveMonsterResponse(action){
 async function resolveMonsterHit(dodgeFailed){
   if(!battle||battle.ended)return;
   const m=battle.monster;
-  let dmg=rollDamage(m.attack);
+  let dmg=rollDamage(Math.max(3,Math.round(m.attack*0.65)));
   const guard=battle.guardPower||0;
   if(guard)dmg=Math.max(1,Math.floor(dmg*(1-guard)));
   battle.playerHp=Math.max(0,battle.playerHp-dmg);
@@ -1475,6 +1482,8 @@ async function endMonsterTurn(){
   if(!battle||battle.ended)return;
   battle.awaitingDodge=false;
   battle.pendingDodge=null;
+  // 每次魔物回合结束都清除防御状态，避免成功闪避后减伤残留到下一回合。
+  battle.guardPower=0;
   document.getElementById("dodgeModalBack").classList.remove("show");
   battle.round++;
   setBattleTurn("player");
@@ -1510,9 +1519,13 @@ async function finishBattle(win){
   await unlockMonsterInBestiary(selectedMonster.id);
   const rewardCoins=10+buildMonsterStats(selectedMonster,selectedMap).level*5;
   const newCoins=Number(currentAdventurer?.coins||0)+rewardCoins;
-  const newScore=Number(currentAdventurer?.score||0)+10;
-  const {data}=await db.from("adventurers").update({coins:newCoins,score:newScore}).eq("user_id",currentUser.id).select().single();
-  if(data)currentAdventurer=data;
+  // adventurers 表使用 coins；分数单独记入 game_records，避免因不存在的 score 字段导致金币更新失败。
+  const {data:coinData,error:coinError}=await db.from("adventurers").update({coins:newCoins}).eq("user_id",currentUser.id).select().single();
+  if(coinError){
+    addBattleLog("⚠️ 魔物已击败，但金币保存失败："+coinError.message,true);
+  }else if(coinData){
+    currentAdventurer=coinData;
+  }
   await recordHunt(true,10);
   addBattleLog("🏆 魔物被击败！图鉴已记录。",true);
   document.getElementById("battleResult").style.display="block";
@@ -1543,23 +1556,30 @@ async function rollLoot(){
   const prof=Math.max(0,Number(currentAdventurer?.proficiency||0));
   const profBonus=Math.floor(prof/2);
   const coop=Math.max(0,battle.coopBonus||0);
+  const effectiveRoll=Math.min(20,Math.max(1,roll+profBonus+coop));
   let chosen=null;
-  if(drops.length===1)chosen=drops[0];
-  else if(drops.length>1){
-    // 按普通到稀有排序，D20 越高越偏向稀有素材；熟练度与队伍协作提高有效点数。
-    const sorted=[...drops].sort((a,b)=>Number(b.drop_weight??10)-Number(a.drop_weight??10));
-    const effectiveRoll=Math.min(20,Math.max(1,roll+profBonus+coop));
+  let quantity=0;
+  if(drops.length===1){
+    chosen=drops[0];
+  }else if(drops.length>1){
+    // 普通素材排前、稀有素材排后；同一颗有效 D20 同时决定素材与数量。
+    const sorted=[...drops].sort((a,b)=>{
+      const rareA=Boolean(a.is_rare), rareB=Boolean(b.is_rare);
+      if(rareA!==rareB)return Number(rareA)-Number(rareB);
+      return Number(b.drop_weight??10)-Number(a.drop_weight??10);
+    });
     const index=Math.min(sorted.length-1,Math.floor(((effectiveRoll-1)/20)*sorted.length));
     chosen=sorted[index];
   }
-  const effectiveRoll=Math.min(20,Math.max(1,roll+profBonus+coop));
   const tier=effectiveRoll>=18?"✨ 极佳掉落":effectiveRoll>=14?"🌟 稀有掉落":effectiveRoll>=8?"🍖 良好掉落":"📦 普通掉落";
   const lines=[`🎲 D20：${roll}`,`📈 熟练度修正：+${profBonus}`,`👥 队伍协作：+${coop}`,`⭐ 有效点数：${effectiveRoll}（原始 ${roll} + 熟练度 ${profBonus} + 协作 ${coop}）`,`⭐ 掉落判定：${tier}`,`🎯 骰子结果决定素材：${chosen?.item_name||"无"}`];
   const obtained=[];
   if(chosen){
     const min=Math.max(1,Number(chosen.min_count??1)||1);
     const max=Math.max(min,Number(chosen.max_count??min)||min);
-    const quantity=Math.floor(Math.random()*(max-min+1))+min;
+    // 不再额外随机数量：有效 D20 在该素材允许的数量范围内决定最终数量。
+    quantity=min+Math.floor(((effectiveRoll-1)/20)*(max-min+1));
+    quantity=Math.min(max,Math.max(min,quantity));
     const saved=await addInventoryItem(chosen.item_name,chosen.item_desc??"魔物掉落素材",quantity);
     obtained.push(saved?`📦 ${chosen.item_name} ×${quantity}`:`📦 ${chosen.item_name} ×${quantity}（写入背包失败，请检查 inventory 表权限）`);
   }else obtained.push("⚠️ 该魔物没有配置掉落素材。");
@@ -1611,7 +1631,17 @@ function weightedPick(items){
   return usable[usable.length-1];
 }
 
-async function recordHunt(success,score){try{await db.from("game_records").insert({user_id:currentUser.id,score:Number(score||0),level:Number(currentAdventurer?.level??1),correct_count:success?1:0,wrong_count:success?0:1})}catch(e){console.warn("game_records 写入失败",e)}}
+async function recordHunt(success,score){
+  try{
+    // 只写入已确认存在的 game_records 字段；correct_count / wrong_count 并非当前表的必需字段。
+    const {error}=await db.from("game_records").insert({
+      user_id:currentUser.id,
+      score:Number(score||0),
+      level:Number(currentAdventurer?.level??1)
+    });
+    if(error)console.warn("game_records 写入失败",error.message);
+  }catch(e){console.warn("game_records 写入失败",e)}
+}
 
 async function addInventoryItem(itemName,itemDesc,quantity){
   try{
@@ -1666,7 +1696,7 @@ async function rest(){
 }
 
 /* =============================================================
-   👑 管理员 管理员后台设置功能逻辑
+   👑 GM 管理员后台设置功能逻辑
    ============================================================= */
 function showAdminPane(name){
   if(!isAdmin())return;
@@ -1772,7 +1802,7 @@ async function loadAdminSelfData(){
   }
   if(!p){document.getElementById("adminSelfMsg").textContent="你还没有冒险者角色，请先创建角色。";return;}
   fillAdminFields("self_",p);
-  document.getElementById("adminSelfMsg").textContent="已读取当前 管理员 角色："+(p.name||"无名冒险者");
+  document.getElementById("adminSelfMsg").textContent="已读取当前 GM 角色："+(p.name||"无名冒险者");
 }
 
 async function saveAdminSelfData(){
@@ -1782,7 +1812,7 @@ async function saveAdminSelfData(){
   const {data,error}=await db.from("adventurers").update(updates).eq("user_id",currentUser.id).select().single();
   if(error){msg.textContent="保存失败："+error.message;msg.className="err";return;}
   currentAdventurer=data;
-  msg.textContent="✅ 我的管理员数据已保存。";msg.className="ok";
+  msg.textContent="✅ 我的 GM 数据已保存。";msg.className="ok";
   await loadPanel();
 }
 
