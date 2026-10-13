@@ -703,7 +703,7 @@ async function createAdventurer(){
   const {data,error}=await db.from("adventurers").insert({
     user_id:currentUser.id,name,age,gender,height,race,job,
     technique,endurance,taste,magic_sense,smell,proficiency,
-    action_points:5,max_action_points:5,coins:0,
+    action_points:5,max_action_points:5,coins:0,level:1,experience:0,
     unlocked_monsters: []
   }).select().single();
 
@@ -738,8 +738,8 @@ async function loadPanel(){
         <div>📍 位置：${escapeHtml(d.location||"城镇")}</div>
         <div>⚡ 行动点：${d.action_points??0} / ${d.max_action_points??5}</div>
         <div>💰 金币：${d.coins??0} 枚</div>
-        <div>🏆 等级：${d.level??1}</div>
-        <div>⭐ 分数：${d.score??0}</div>
+        <div>🏆 等级：${Math.max(1,Number(d.level)||1)}</div>
+        <div>✨ 经验：${Math.max(0,Number(d.experience)||0)} / ${Math.max(1,Number(d.level)||1)*10}</div>
       </div>
     </div>
     <div class="card" style="box-shadow:none;background:#f8f6f0">
@@ -1252,6 +1252,8 @@ async function startBattle(){
   }
   addBattleLog("⚡ 进入战斗，已消耗 1 AP；逃跑不会返还 AP。",true);
   addBattleLog("🎲 规则：你的回合可攻击、感知弱点或逃跑；随后魔物发动攻击，你选择闪避、防御、吃血药或逃跑。",true);
+  addBattleLog(`📊 属性效果：技巧影响命中与攻击，耐力增加最大 HP 并减伤 ${Math.floor(Math.max(0,p.endurance)/3)} 点，味觉提高发现弱点后的额外伤害，嗅觉影响闪避/逃跑，魔力感知影响弱点分析，熟练度影响掉落骰点。`);
+  addBattleLog("✨ 经验规则：胜利获得 10 + 魔物等级 × 5 经验；升级需求为当前等级 × 10；每次升级六项基础属性各 +1。",true);
 }
 
 function addBattleLog(text,important=false){
@@ -1360,7 +1362,8 @@ async function monsterTurn(){
   battle.awaitingDodge=true;
   const m=battle.monster;
   const raw=d20();
-  const target=10+Math.floor(m.attack/3);
+  // 魔物自己的 D20 会影响这次攻击的压迫程度：低点数更容易闪避，高点数更难闪避。
+  const target=Math.max(8,Math.min(20,10+Math.floor(m.attack/3)+Math.floor((raw-10)/5)));
   battle.pendingDodge={raw,target,monsterAttack:m.attack};
   setBattleTurn("monster");
   document.getElementById("dodgeModalBack").classList.add("show");
@@ -1464,11 +1467,14 @@ async function resolveMonsterResponse(action){
 async function resolveMonsterHit(dodgeFailed){
   if(!battle||battle.ended)return;
   const m=battle.monster;
-  let dmg=rollDamage(Math.max(3,Math.round(m.attack*0.65)));
+  let dmg=rollDamage(Math.max(3,Math.round(m.attack*0.75)));
+  // 耐力不只增加最大 HP，也会降低受到的伤害；保留至少 1 点伤害，避免高属性完全无敌。
+  const enduranceReduction=Math.floor(Math.max(0,battle.player.endurance)/3);
+  dmg=Math.max(1,dmg-enduranceReduction);
   const guard=battle.guardPower||0;
   if(guard)dmg=Math.max(1,Math.floor(dmg*(1-guard)));
   battle.playerHp=Math.max(0,battle.playerHp-dmg);
-  addBattleLog(`👾 魔物造成 ${dmg} 点伤害${guard?"（防御减伤）":""}。`);
+  addBattleLog(`👾 魔物造成 ${dmg} 点伤害${enduranceReduction?`（耐力减伤 ${enduranceReduction}）`:""}${guard?"（防御减伤）":""}。`);
   battle.guardPower=0;
   updateBattleUI();
   if(battle.playerHp<=0){
@@ -1517,19 +1523,47 @@ async function finishBattle(win){
   }
 
   await unlockMonsterInBestiary(selectedMonster.id);
-  const rewardCoins=10+buildMonsterStats(selectedMonster,selectedMap).level*5;
-  const newCoins=Number(currentAdventurer?.coins||0)+rewardCoins;
-  // adventurers 表使用 coins；分数单独记入 game_records，避免因不存在的 score 字段导致金币更新失败。
-  const {data:coinData,error:coinError}=await db.from("adventurers").update({coins:newCoins}).eq("user_id",currentUser.id).select().single();
-  if(coinError){
-    addBattleLog("⚠️ 魔物已击败，但金币保存失败："+coinError.message,true);
-  }else if(coinData){
-    currentAdventurer=coinData;
+  const monsterLevel=buildMonsterStats(selectedMonster,selectedMap).level;
+  const rewardCoins=10+monsterLevel*5;
+  const rewardExp=10+monsterLevel*5;
+  const oldLevel=Math.max(1,Number(currentAdventurer?.level)||1);
+  let newLevel=oldLevel;
+  let newExp=Math.max(0,Number(currentAdventurer?.experience)||0)+rewardExp;
+  const levelUps=[];
+  // 升级所需经验 = 当前等级 × 10；保留溢出经验，足够时可连续升级。
+  while(newExp>=newLevel*10){
+    newExp-=newLevel*10;
+    newLevel++;
+    levelUps.push(newLevel);
+  }
+  const statUpdates={
+    coins:Number(currentAdventurer?.coins||0)+rewardCoins,
+    level:newLevel,
+    experience:newExp
+  };
+  if(levelUps.length){
+    // 每次升级，六项基础属性各 +1；与数据库现有属性列对应。
+    for(const key of ["technique","endurance","taste","magic_sense","smell","proficiency"]){
+      statUpdates[key]=Math.max(0,Number(currentAdventurer?.[key])||0)+levelUps.length;
+    }
+  }
+  const {data:rewardData,error:rewardError}=await db.from("adventurers").update(statUpdates).eq("user_id",currentUser.id).select().single();
+  let levelText="";
+  if(rewardError){
+    addBattleLog("⚠️ 魔物已击败，但经验/金币保存失败："+rewardError.message,true);
+    levelText="\n⚠️ 经验和金币未能保存，请检查数据库经验字段是否已添加。";
+  }else if(rewardData){
+    currentAdventurer=rewardData;
+    if(levelUps.length){
+      levelText="\n🎉 升级！达到 Lv."+newLevel+"，六项属性各 +"+levelUps.length+"。";
+      addBattleLog("🎉 升级成功！当前等级 Lv."+newLevel+"；技巧、耐力、味觉、熟练度、嗅觉、魔力感知各 +"+levelUps.length+"。",true);
+    }
+    addBattleLog("✨ 获得经验 +"+rewardExp+"（当前经验 "+newExp+" / "+(newLevel*10)+"）",true);
   }
   await recordHunt(true,10);
   addBattleLog("🏆 魔物被击败！图鉴已记录。",true);
   document.getElementById("battleResult").style.display="block";
-  document.getElementById("battleResult").textContent="🏆 狩猎成功！\n+10 分　💰 +"+rewardCoins+" 金币\n📖 已解锁图鉴："+monsterName(selectedMonster)+"\n\n🎁 接下来请进行掉落判定。";
+  document.getElementById("battleResult").textContent="🏆 狩猎成功！\n+10 分　💰 +"+rewardCoins+" 金币　✨ +"+rewardExp+" 经验"+levelText+"\n📈 当前等级：Lv."+Math.max(1,Number(currentAdventurer?.level)||oldLevel)+"　经验："+Math.max(0,Number(currentAdventurer?.experience)||0)+" / "+(Math.max(1,Number(currentAdventurer?.level)||oldLevel)*10)+"\n📖 已解锁图鉴："+monsterName(selectedMonster)+"\n\n🎁 接下来请进行掉落判定。";
   updateBattleUI();
   setTimeout(()=>openLootModal(),500);
 }
@@ -1554,7 +1588,8 @@ async function rollLoot(){
   const drops=(selectedMonster?.drops||[]).filter(d=>d&&d.item_name);
   const roll=d20();
   const prof=Math.max(0,Number(currentAdventurer?.proficiency||0));
-  const profBonus=Math.floor(prof/2);
+  // 熟练度提高稀有素材与数量的骰点，但采用缓慢成长，避免新手属性直接把 D20 推满。
+  const profBonus=Math.min(5,Math.floor(prof/4));
   const coop=Math.max(0,battle.coopBonus||0);
   const effectiveRoll=Math.min(20,Math.max(1,roll+profBonus+coop));
   let chosen=null;
@@ -1617,18 +1652,6 @@ function closeBattleModal(){
   if(battle?.ended&&battle?.won&&!battle?.lootFinished&&selectedMonster){openLootModal();return;}
   document.getElementById("battleModalBack").classList.remove("show");
   if(!battle||battle.lootFinished||battle.escaped){battle=null;loadPanel();refreshTeam();}
-}
-
-function weightedPick(items){
-  const usable=items.filter(x=>Number(x.drop_weight??0)>0);
-  if(!usable.length)return items.length?items[Math.floor(Math.random()*items.length)]:null;
-  const total=usable.reduce((s,x)=>s+Number(x.drop_weight||0),0);
-  let r=Math.random()*total;
-  for(const item of usable){
-    r-=Number(item.drop_weight||0);
-    if(r<=0)return item;
-  }
-  return usable[usable.length-1];
 }
 
 async function recordHunt(success,score){
