@@ -964,16 +964,16 @@ async function selectMap(id){
       .in("monster_id", ids).order("id", {ascending:true});
     if (dropError) console.warn("读取魔物掉落失败：", dropError.message);
     monsters = regionMonsters.map(m => {
-      // 统一按“地区阶段 + 数据库难度”生成魔物等级，不改动数据库中的魔物名称、描述或掉落。
-      const regionTier = getMonsterRegionTier(selectedMap);
+      // 地图按顺序分配等级段：美食镇 Lv1–8，雨林 Lv9–16，原野 Lv17–24，
+      // 山岭 Lv25–32，荒原 Lv33–40，深海 Lv41–48。地区难度决定本地图内的档位。
+      const regionStart = getMonsterRegionTier(selectedMap);
       const difficulty = Math.max(1, Math.min(4, Number(m.difficulty) || 1));
-      const monsterLevel = Math.max(1, Math.min(8, regionTier + difficulty - 1));
       const stableRoll = hashId(m.id);
-      // 数值按等级曲线：Lv1 HP25–35 / 攻5–7 / 防1–2；每级平稳提升。
-      // 若数据库已有明确 hp/atk/def 数值，则优先保留管理员设置值。
-      const balancedHp = 15 + monsterLevel * 10 + (stableRoll % 11);
-      const balancedAtk = 3 + monsterLevel * 2 + (stableRoll % 3);
-      const balancedDef = monsterLevel + (stableRoll % 2);
+      const monsterLevel = Math.max(regionStart, Math.min(regionStart + 7, regionStart + (difficulty - 1) * 2 + (stableRoll % 2)));
+      // 生命、防御、攻击随等级提升；同一只魔物每次遭遇数值固定。
+      const balancedHp = 20 + monsterLevel * 8 + (stableRoll % 5);
+      const balancedAtk = 3 + Math.ceil(monsterLevel * 0.75) + (stableRoll % 2);
+      const balancedDef = Math.floor(monsterLevel * 0.4) + (stableRoll % 2);
       return {
         ...m,
         name: m.monster_name,
@@ -1032,26 +1032,28 @@ function hashId(v){let n=0;for(const c of String(v)){n=(n*31+c.charCodeAt(0))%99
 function getMonsterRegionTier(map){
   const key=String(map?.region_key||"").toLowerCase();
   const name=String(mapName(map)||"");
-  // 美食镇和幽毒雨林都是初始可进入区域；雨林略有挑战，但仍适合新手。
-  if(key.includes("town")||name.includes("美食镇"))return 1;
-  if(key.includes("rain")||name.includes("幽毒雨林"))return 1;
-  if(key.includes("plain")||name.includes("獠牙原野"))return 2;
-  if(key.includes("mountain")||name.includes("炎狱山岭"))return 3;
-  if(key.includes("snow")||name.includes("霜牙荒原"))return 4;
-  if(key.includes("sea")||name.includes("魔潮深海"))return 5;
-  // 兼容管理员自定义地图：使用地图危险度，但限制在合理范围。
-  return Math.max(1,Math.min(5,Number(mapDanger(map))+1));
+  // 返回每张地图等级段的起始等级，而非单个等级。
+  if(key.includes("town")||name.includes("美食镇"))return 1;       // Lv1–8
+  if(key.includes("rain")||name.includes("幽毒雨林"))return 9;    // Lv9–16
+  if(key.includes("plain")||name.includes("獠牙原野"))return 17; // Lv17–24
+  if(key.includes("mountain")||name.includes("炎狱山岭"))return 25; // Lv25–32
+  if(key.includes("snow")||name.includes("霜牙荒原"))return 33;  // Lv33–40
+  if(key.includes("sea")||name.includes("魔潮深海"))return 41;   // Lv41–48
+  // 兼容管理员自定义地图：危险度决定等级段起点，最多进入深海档。
+  const danger=Math.max(0,Math.min(5,Number(mapDanger(map))||0));
+  return 1+danger*8;
 }
 
 function buildMonsterStats(m,map){
-  const level=Math.max(1,Math.min(8,Number(m.level)||getMonsterRegionTier(map)));
+  const regionStart=getMonsterRegionTier(map);
+  const level=Math.max(regionStart,Math.min(regionStart+7,Number(m.level)||regionStart));
   const stableRoll=hashId(m.id);
-  // 同一只魔物每次战斗数值固定，避免刷新后数值变化。
+  // 同一只魔物每次战斗数值固定；每张地图的整体数值严格高于上一张。
   return {
     level,
-    maxHp:Math.max(1,Number(m.hp)||(15+level*10+(stableRoll%11))),
-    attack:Math.max(1,Number(m.atk)||(3+level*2+(stableRoll%3))),
-    defense:Math.max(0,Number(m.def)||(level+(stableRoll%2))),
+    maxHp:Math.max(1,Number(m.hp)||(20+level*8+(stableRoll%5))),
+    attack:Math.max(1,Number(m.atk)||(3+Math.ceil(level*0.75)+(stableRoll%2))),
+    defense:Math.max(0,Number(m.def)||(Math.ceil(level*0.45)+(stableRoll%2))),
     speed:5+level+(stableRoll%4)
   };
 }
