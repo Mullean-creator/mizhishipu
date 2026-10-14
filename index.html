@@ -318,6 +318,9 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
         <div class="card"><h3>🐉 全服 BOSS 管理</h3>
           <p class="muted">管理员可以开启新活动、提前结束并手动结算。每次活动只有一个共享血条；已造成伤害的玩家均有资格领取一次奖励。</p>
           <div class="grid"><div><label>BOSS 名称</label><input id="bossAdminName" value="深渊食灾龙"></div><div><label>BOSS 等级</label><input id="bossAdminLevel" type="number" min="1" value="1"></div><div><label>全服总 HP</label><input id="bossAdminHp" type="number" min="1" value="100000"></div></div>
+          <label style="display:block;margin-top:10px">BOSS 可抽取的食材掉落（每行一项，格式：食材名称｜描述；不填写描述也可以）</label><textarea id="bossAdminDrops" rows="4" placeholder="深渊龙鳞｜坚硬的龙类素材
+灾厄龙肉｜蕴含强大魔力的肉类
+食灾核心｜稀有的BOSS核心"></textarea><p class="small muted">每位有贡献伤害的玩家在活动结束后可各自抽取一次；实际随机发放由 Supabase 奖励函数处理。</p>
           <div class="row" style="margin-top:10px"><button class="primary" onclick="adminStartWorldBoss()">🚩 开启新 BOSS 活动</button><button class="danger" onclick="adminEndWorldBoss()">⏹ 提前结束并结算</button><button class="secondary" onclick="loadWorldBoss(true)">🔄 刷新状态</button></div>
           <p id="bossAdminMsg" class="muted"></p>
         </div>
@@ -2203,11 +2206,11 @@ async function loadShop(kind='mystery'){
     const gear=EQUIPMENT_CATALOG.filter(x=>unlocked.has(x.map)).map(x=>`<div class="inventoryItem"><b>${x.slot==='weapon'?'🗡️':'🛡️'} ${escapeHtml(x.name)}</b><span class="badge">${x.price} 金币</span><p class="muted">地图：${escapeHtml(x.map)}｜${x.slot==='weapon'?'攻击':'防御'}加成 +${x.slot==='weapon'?x.attack:x.defense}</p><p>${escapeHtml(x.desc)}</p><button class="primary" onclick="buyShopItem('${escapeJs(x.name)}')">购买</button></div>`).join('');
     box.innerHTML=`<div class="stat">💰 当前金币：${Number(currentAdventurer.coins)||0}</div><h4>⚔️ 莉莉娅会长的装备货架</h4><p class="small muted">只显示已解锁地图对应的装备。购买后进入背包，在装备栏穿戴才会生效。</p>${gear||'<p class="muted">暂无可购买的地图装备。</p>'}`;return;
   }
-  const packs=ATTRIBUTE_PACKS.map(x=>`<div class="inventoryItem"><b>✨ ${escapeHtml(x.name)}</b><span class="badge">固定提升：${escapeHtml(x.stat)} +${x.amount}</span><p>${escapeHtml(x.desc)}</p><p class="muted">支付方式任选其一：${x.price} 金币，或 1 份特殊材料（标记为稀有的魔物掉落物）。</p><button class="primary" onclick="buyAttributePack('${x.key}','coins')">用 ${x.price} 金币购买</button></div>`).join('');
+  const packs=ATTRIBUTE_PACKS.map(x=>`<div class="inventoryItem"><b>✨ ${escapeHtml(x.name)}</b><span class="badge">固定提升：${escapeHtml(x.stat)} +${x.amount}</span><p>${escapeHtml(x.desc)}</p><p class="muted">购买价格：${x.price} 金币。</p><button class="primary" onclick="buyAttributePack('${x.key}','coins')">用 ${x.price} 金币购买</button></div>`).join('');
   const mats=(inv||[]).filter(x=>getItemCount(x)>0&&rareNames.has(x.item_name)&&!gearNames.has(x.item_name)&&!SHOP_POTIONS.some(p=>p.name===x.item_name));
   const sellingPool=(inv||[]).filter(x=>getItemCount(x)>0&&!gearNames.has(x.item_name)&&!SHOP_POTIONS.some(p=>p.name===x.item_name)&&!ATTRIBUTE_PACKS.some(a=>a.name===x.item_name));
   const selling=sellingPool.length?sellingPool.map(x=>{const price=rareNames.has(x.item_name)?20:5;return `<div class="inventoryItem"><span class="badge">×${getItemCount(x)}</span><b>🧺 ${escapeHtml(x.item_name)}</b><p class="muted">${rareNames.has(x.item_name)?'特殊/稀有素材':'普通素材'}｜每份回收 ${price} 金币</p><button class="secondary" onclick="sellMaterial('${escapeJs(x.id)}',1)">出售 1 份</button> <button class="secondary" onclick="sellMaterial('${escapeJs(x.id)}',${getItemCount(x)})">全部出售</button></div>`;}).join(''):'<p class="muted">背包里暂时没有可出售的素材。</p>';
-  box.innerHTML=`<div class="stat">💰 当前金币：${Number(currentAdventurer.coins)||0}</div><h4>✨ 阿尔德里亚·密斯西里的固定属性礼包</h4><p class="small muted">每个礼包固定提升一项属性 +2，不需要随机抽取。特殊材料指掉落表中标记为稀有的魔物素材；背包里至少有 1 份此类素材即可选择材料支付。</p>${packs}<h4>🧺 素材回收</h4><p class="small muted">普通素材 5 金币/份；特殊/稀有素材 20 金币/份。装备与恢复药剂不能出售。</p>${selling}`;
+  box.innerHTML=`<div class="stat">💰 当前金币：${Number(currentAdventurer.coins)||0}</div><h4>✨ 阿尔德里亚·密斯西里的固定属性礼包</h4><p class="small muted">每个礼包固定提升一项属性 +2，不需要随机抽取；仅使用金币购买。</p>${packs}<h4>🧺 素材回收</h4><p class="small muted">普通素材 5 金币/份；特殊/稀有素材 20 金币/份。装备与恢复药剂不能出售。</p>${selling}`;
 }
 async function buyAttributePack(key,currency='coins'){
   if(isResting()){alert('你正在客栈休息，AP 回满并结束休息后才能购买。');return;}
@@ -2217,16 +2220,8 @@ async function buyAttributePack(key,currency='coins'){
   try{
     const {data:inv,error:invError}=await db.from('inventory').select('*').eq('player_id',currentUser.id).order('id',{ascending:true});
     if(invError){alert('读取背包失败：'+invError.message);return;}
-    let materialRow=null;
-    if(currency==='material'){
-      const {data:drops,error:dropsError}=await db.from('monster_drops').select('item_name,is_rare');
-      if(dropsError){alert('读取特殊材料清单失败：'+dropsError.message);return;}
-      const rareNames=new Set((drops||[]).filter(x=>x.is_rare).map(x=>x.item_name));
-      materialRow=(inv||[]).find(x=>getItemCount(x)>0&&rareNames.has(x.item_name)&&!parseEquipmentMeta(x)&&!SHOP_POTIONS.some(p=>p.name===x.item_name));
-      if(!materialRow){alert('你没有可用于兑换的特殊材料。请先狩猎获得标记为稀有的魔物掉落物。');return;}
-    }else if(currency==='coins'){
-      const coins=Number(currentAdventurer.coins)||0;if(coins<pack.price){alert(`金币不足！购买需要 ${pack.price} 金币，你目前有 ${coins}。`);return;}
-    }else{alert('不支持的支付方式。');return;}
+    if(currency!=='coins'){alert('属性礼包目前仅支持金币购买。');return;}
+    const coins=Number(currentAdventurer.coins)||0;if(coins<pack.price){alert(`金币不足！购买需要 ${pack.price} 金币，你目前有 ${coins}。`);return;}
     const statKeys=['technique','endurance','taste','magic_sense','smell','proficiency'];
     if(!statKeys.includes(pack.key)){alert('属性礼包配置有误，已取消购买。');return;}
     // 先支付，再增加属性；任一步失败都会尽量回滚，使用现有列，不改表结构。
@@ -2234,15 +2229,11 @@ async function buyAttributePack(key,currency='coins'){
     if(currency==='coins'){
       const {data:paid,error:payError}=await db.from('adventurers').update({coins:oldCoins-pack.price}).eq('user_id',currentUser.id).select().single();
       if(payError||!paid){alert('金币扣款失败：'+(payError?.message||'未返回玩家资料'));return;}currentAdventurer=paid;
-    }else{
-      const count=getItemCount(materialRow);const {error:matError}=await db.from('inventory').update({item_count:count-1}).eq('id',materialRow.id).eq('player_id',currentUser.id);
-      if(matError){alert('特殊材料扣除失败：'+matError.message);return;}
     }
     const oldValue=Number(currentAdventurer[pack.key])||0;
     const {data:updated,error:updateError}=await db.from('adventurers').update({[pack.key]:oldValue+pack.amount}).eq('user_id',currentUser.id).select().single();
     if(updateError||!updated){
       if(currency==='coins'){const refund=await db.from('adventurers').update({coins:oldCoins}).eq('user_id',currentUser.id).select().single();if(refund.data)currentAdventurer=refund.data;}
-      else await db.from('inventory').update({item_count:getItemCount(materialRow)}).eq('id',materialRow.id).eq('player_id',currentUser.id);
       alert('属性增加失败，已尝试退还支付：'+(updateError?.message||'未返回玩家资料'));return;
     }
     currentAdventurer=updated;alert(`购买成功！${pack.stat} +${pack.amount}。`);await loadPanel();await loadShop('mystery');
@@ -2356,10 +2347,13 @@ async function claimWorldBossReward(){
 async function adminStartWorldBoss(){
   if(!isAdmin())return alert('仅管理员可以操作。');
   const name=document.getElementById('bossAdminName').value.trim(),level=Number(document.getElementById('bossAdminLevel').value),hp=Number(document.getElementById('bossAdminHp').value),msg=document.getElementById('bossAdminMsg');
+  const dropsRaw=document.getElementById('bossAdminDrops').value.trim();
+  const drops=dropsRaw.split(/\r?\n/).map(line=>line.trim()).filter(Boolean).map(line=>{const parts=line.split('｜');return {name:(parts[0]||'').trim(),description:(parts.slice(1).join('｜')||'BOSS 活动掉落食材').trim()};}).filter(x=>x.name);
   if(!name||!Number.isInteger(level)||level<1||!Number.isInteger(hp)||hp<1){msg.textContent='请填写有效的名称、等级和总 HP。';return;}
-  const {data,error}=await db.rpc('world_boss_admin_start',{p_boss_name:name,p_boss_level:level,p_max_hp:hp});
+  if(!drops.length){msg.textContent='请至少填写一种 BOSS 掉落食材。';msg.className='err';return;}
+  const {data,error}=await db.rpc('world_boss_admin_start',{p_boss_name:name,p_boss_level:level,p_max_hp:hp,p_reward_drops:drops});
   if(error){msg.textContent='开启失败：'+error.message+'。请先执行随附 SQL。';msg.className='err';return;}
-  msg.textContent='已开启全服 BOSS 活动。';msg.className='ok';await loadWorldBoss(true);
+  msg.textContent='已开启全服 BOSS 活动，掉落食材已提交。';msg.className='ok';await loadWorldBoss(true);
 }
 async function adminEndWorldBoss(){
   if(!isAdmin())return alert('仅管理员可以操作。');
