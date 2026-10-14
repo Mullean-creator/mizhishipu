@@ -2280,18 +2280,44 @@ async function sellMaterial(id,quantity){
     if(dropError){alert('读取素材价格失败：'+dropError.message+'。为避免误扣背包物品，本次未出售。');return;}
     // BOSS 专属食材即使不在 monster_drops 表里，也按普通素材 5 金币/份回收；稀有素材 20 金币/份。
     const price=drops?.some(x=>x.is_rare)?20:5,total=price*qty;
-    const {data:changed,error:updateError}=await db.from('inventory').update({item_count:count-qty}).eq('id',id).eq('player_id',currentUser.id).eq('item_count',count).select('id,item_count').maybeSingle();
-    if(updateError||!changed){alert('扣除素材失败：'+(updateError?.message||'背包记录没有更新，可能是权限策略限制或数量已变化'));return;}
+    const soldEntireStack=qty===count;
+    let inventoryMutationError=null,inventoryChanged=false;
+    if(soldEntireStack){
+      // 全部售出时删除记录，避免把 item_count 写成 0 触发 inventory_count_check。
+      // 不使用 DELETE ... RETURNING，避免受额外 SELECT/RLS 返回策略影响。
+      const {error:deleteError}=await db.from('inventory').delete().eq('id',id).eq('player_id',currentUser.id).eq('item_count',count);
+      inventoryMutationError=deleteError;
+      if(!deleteError){
+        const {data:stillThere,error:verifyError}=await db.from('inventory').select('id,item_count').eq('id',id).eq('player_id',currentUser.id).maybeSingle();
+        if(verifyError){inventoryMutationError=verifyError;}
+        else {inventoryChanged=!stillThere;}
+      }
+    }else{
+      const {data:changed,error:updateError}=await db.from('inventory').update({item_count:count-qty}).eq('id',id).eq('player_id',currentUser.id).eq('item_count',count).select('id,item_count').maybeSingle();
+      inventoryMutationError=updateError;inventoryChanged=!!changed;
+    }
+    if(inventoryMutationError||!inventoryChanged){
+      alert('扣除素材失败：'+(inventoryMutationError?.message||'背包记录没有更新，可能是权限策略限制或数量已变化'));return;
+    }
+    // 若金币读取或入账失败，尽力恢复原背包数量；全部售出时则重新插回原记录。
+    const restoreInventory=async()=>{
+      if(soldEntireStack){
+        const {error:restoreError}=await db.from('inventory').insert({player_id:currentUser.id,item_name:item.item_name,item_desc:item.item_desc||'',item_count:count});
+        return restoreError;
+      }
+      const {error:restoreError}=await db.from('inventory').update({item_count:count}).eq('id',id).eq('player_id',currentUser.id);
+      return restoreError;
+    };
     const {data:latest,error:readCoinsError}=await db.from('adventurers').select('coins').eq('user_id',currentUser.id).maybeSingle();
     if(readCoinsError||!latest){
-      const rollback=await db.from('inventory').update({item_count:count}).eq('id',id).eq('player_id',currentUser.id).select('id').maybeSingle();
-      alert('读取当前金币失败：'+(readCoinsError?.message||'未找到玩家档案')+(rollback.error?'；并且恢复背包数量失败，请联系管理员核对。': '；已尝试恢复素材数量。'));return;
+      const rollbackError=await restoreInventory();
+      alert('读取当前金币失败：'+(readCoinsError?.message||'未找到玩家档案')+(rollbackError?'；恢复背包失败，请联系管理员核对。':'；已尝试恢复素材数量。'));return;
     }
     const coins=(Number(latest.coins)||0)+total;
     const {data:updated,error:coinError}=await db.from('adventurers').update({coins}).eq('user_id',currentUser.id).select().maybeSingle();
     if(coinError||!updated){
-      const rollback=await db.from('inventory').update({item_count:count}).eq('id',id).eq('player_id',currentUser.id).select('id').maybeSingle();
-      alert('金币入账失败：'+(coinError?.message||'玩家资料没有更新')+(rollback.error||!rollback.data?'；恢复素材数量也未能确认，请联系管理员核对背包。':'；已尝试恢复素材数量。'));return;
+      const rollbackError=await restoreInventory();
+      alert('金币入账失败：'+(coinError?.message||'玩家资料没有更新')+(rollbackError?'；恢复素材数量失败，请联系管理员核对背包。':'；已尝试恢复素材数量。'));return;
     }
     currentAdventurer=updated;alert(`出售成功：${item.item_name} ×${qty}，获得 ${total} 金币。`);await loadInventory();await loadEquipment();await loadShop();await loadPanel();
   }finally{window[lockKey]=false;}
