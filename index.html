@@ -2363,11 +2363,11 @@ let currentWorldBossAdmin=null;
 async function loadWorldBoss(adminRefresh=false){
   const status=document.getElementById('worldBossStatus');if(!status)return;
   status.textContent='正在读取全服 BOSS 状态……';
-  const {data,error}=await db.from('world_boss_events').select('*').eq('show_to_players',true).order('created_at',{ascending:false}).limit(1).maybeSingle();
+  const {data,error}=await db.from('world_boss_events').select('*').eq('show_to_players',true).eq('status','active').order('created_at',{ascending:false}).limit(1).maybeSingle();
   if(error){status.innerHTML='暂时无法读取 BOSS：'+escapeHtml(error.message)+'。请先在 Supabase 执行随附 SQL。';return;}
   currentWorldBoss=data||null;
   const actions=document.getElementById('worldBossActions'),log=document.getElementById('worldBossLog'),reward=document.getElementById('worldBossReward');
-  if(!data){status.textContent='目前没有全服 BOSS 活动。';actions.innerHTML='';log.innerHTML='';reward.innerHTML='<p class="muted">当前没有对全服开放的 BOSS 活动。</p>';return;}
+  if(!data){status.textContent='当前没有进行中的 BOSS 活动。';actions.innerHTML='';log.innerHTML='<p class="muted">当前没有进行中的 BOSS 活动。</p>';reward.innerHTML='<p class="muted">当前没有进行中的 BOSS 活动。</p>';return;}
   const hp=Math.max(0,Number(data.current_hp)||0),max=Math.max(1,Number(data.max_hp)||1),ended=data.status!=='active';
   status.innerHTML='<b>🐉 '+escapeHtml(data.boss_name||'全服 BOSS')+'（Lv.'+(Number(data.boss_level)||1)+'）</b><p>'+ (ended?'活动已结束，可以领取参与奖励。':'活动进行中，快来贡献伤害！') +'</p><div class="stat">全服 HP：'+hp.toLocaleString()+' / '+max.toLocaleString()+'</div><div style="height:14px;background:#e5e0d6;border-radius:9px;overflow:hidden"><div style="height:100%;width:'+Math.max(0,Math.min(100,hp/max*100))+'%;background:#b3261e"></div></div><p class="small muted">开始时间：'+escapeHtml(data.started_at||data.created_at||'')+'｜状态：'+escapeHtml(data.status)+'</p>';
   actions.innerHTML=ended?'<button class="primary" onclick="claimWorldBossReward()">🎁 抽取 / 领取我的参与奖励</button>':'<button class="primary" onclick="attackWorldBoss()">⚔️ 参加讨伐（每日一次）</button>';
