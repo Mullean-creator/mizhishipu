@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>谜之食谱世界｜西幻美食探索</title>
+<meta name="description" content="欢迎各位冒险者前往美食大陆开启自己的寻味之旅！">
+<meta property="og:type" content="website">
+<meta property="og:title" content="谜之食谱世界｜西幻美食探索">
+<meta property="og:description" content="欢迎各位冒险者前往美食大陆开启自己的寻味之旅！">
+<meta property="og:site_name" content="谜之食谱世界">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="谜之食谱世界｜西幻美食探索">
+<meta name="twitter:description" content="欢迎各位冒险者前往美食大陆开启自己的寻味之旅！">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box}
@@ -2412,11 +2420,15 @@ async function adminStartWorldBoss(){
   const drops=dropsRaw.split(/\r?\n/).map(line=>line.trim()).filter(Boolean).map(line=>{const parts=line.split('｜');return {name:(parts[0]||'').trim(),description:(parts.slice(1).join('｜')||'BOSS 活动掉落食材').trim()};}).filter(x=>x.name);
   if(!name||!Number.isInteger(level)||level<1||!Number.isInteger(hp)||hp<1){msg.textContent='请填写有效的名称、等级和总 HP。';return;}
   if(!drops.length){msg.textContent='请至少填写一种 BOSS 掉落食材。';msg.className='err';return;}
-  const {data,error}=await db.rpc('world_boss_admin_start',{p_boss_name:name,p_boss_level:level,p_max_hp:hp});
-  if(error){msg.textContent='开启失败：'+error.message+'。请先执行随附 SQL。';msg.className='err';return;}
+  // 将食材名单直接交给四参数 RPC，在数据库创建活动时一并保存，避免客户端 UPDATE 被 RLS 拦截。
+  const {data,error}=await db.rpc('world_boss_admin_start',{p_boss_name:name,p_boss_level:level,p_max_hp:hp,p_reward_drops:drops});
+  if(error){msg.textContent='开启失败：'+error.message+'。请确认数据库已安装带 p_reward_drops 参数的 world_boss_admin_start 函数。';msg.className='err';return;}
   if(!data?.id){msg.textContent='开启失败：数据库没有返回 BOSS 活动。';msg.className='err';return;}
-  const {error:dropError}=await db.from('world_boss_events').update({reward_drops:drops}).eq('id',data.id);
-  if(dropError){msg.textContent='BOSS 已开启，但掉落物写入失败：'+dropError.message;msg.className='err';return;}
+  // 验证数据库确实返回已保存的食材；不静默地开启一个没有奖励的 BOSS。
+  const {data:verifyData,error:verifyError}=await db.from('world_boss_events').select('reward_drops').eq('id',data.id).maybeSingle();
+  if(verifyError || !Array.isArray(verifyData?.reward_drops) || !verifyData.reward_drops.some(x=>String(x?.name||'').trim())){
+    msg.textContent='BOSS 创建请求已提交，但数据库未能确认有效食材名单。请检查管理员读取权限或数据库函数；请勿重复开启。';msg.className='err';return;
+  }
   msg.textContent='已开启全服 BOSS 活动，显示已自动开启。';msg.className='ok';await loadAdminWorldBoss();await loadWorldBoss(false);
 }
 async function adminEndWorldBoss(){
