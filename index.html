@@ -316,12 +316,13 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
 
       <div id="adminPaneBoss" class="adminPane">
         <div class="card"><h3>🐉 全服 BOSS 管理</h3>
-          <p class="muted">管理员可以开启新活动、提前结束并手动结算。每次活动只有一个共享血条；已造成伤害的玩家均有资格领取一次奖励。</p>
+          <p class="muted">管理员可以开启新活动、提前结束并手动结算。BOSS 显示开关控制所有玩家（包括管理员）是否能看到当前 BOSS；活动结束后可以关闭显示。无论是否参与讨伐，每位玩家每期都可领取一次奖励。</p>
           <div class="grid"><div><label>BOSS 名称</label><input id="bossAdminName" value="深渊食灾龙"></div><div><label>BOSS 等级</label><input id="bossAdminLevel" type="number" min="1" value="1"></div><div><label>全服总 HP</label><input id="bossAdminHp" type="number" min="1" value="100000"></div></div>
           <label style="display:block;margin-top:10px">BOSS 可抽取的食材掉落（每行一项，格式：食材名称｜描述；不填写描述也可以）</label><textarea id="bossAdminDrops" rows="4" placeholder="深渊龙鳞｜坚硬的龙类素材
 灾厄龙肉｜蕴含强大魔力的肉类
 食灾核心｜稀有的BOSS核心"></textarea><p class="small muted">每位有贡献伤害的玩家在活动结束后可各自抽取一次；实际随机发放由 Supabase 奖励函数处理。</p>
-          <div class="row" style="margin-top:10px"><button class="primary" onclick="adminStartWorldBoss()">🚩 开启新 BOSS 活动</button><button class="danger" onclick="adminEndWorldBoss()">⏹ 提前结束并结算</button><button class="secondary" onclick="loadWorldBoss(true)">🔄 刷新状态</button></div>
+          <div class="row" style="margin-top:10px"><button class="primary" onclick="adminStartWorldBoss()">🚩 开启新 BOSS 活动</button><button class="danger" onclick="adminEndWorldBoss()">⏹ 提前结束并结算</button><button class="secondary" onclick="loadAdminWorldBoss()">🔄 刷新状态</button></div>
+          <div class="card" style="margin-top:12px"><h4>👁️ BOSS 全服显示</h4><p id="bossVisibilityStatus" class="muted">正在读取显示状态……</p><button id="bossVisibilityBtn" class="secondary" onclick="toggleWorldBossVisibility()" disabled>读取中…</button></div>
           <p id="bossAdminMsg" class="muted"></p>
         </div>
       </div>
@@ -1907,7 +1908,7 @@ function showAdminPane(name){
   if(name==="players")loadAdminPlayers();
   if(name==="self")loadAdminSelfData();
   if(name==="maps")loadAdminPlayerMaps(true);
-  if(name==="boss")loadWorldBoss(true);
+  if(name==="boss")loadAdminWorldBoss();
 }
 
 async function loadAdminDashboard(){
@@ -2358,23 +2359,27 @@ function deleteCustomBuff(i){const list=getCustomBuffs();list.splice(i,1);localS
 
 // ================= 全服 BOSS 与管理员背包发放 =================
 let currentWorldBoss=null;
+let currentWorldBossAdmin=null;
 async function loadWorldBoss(adminRefresh=false){
   const status=document.getElementById('worldBossStatus');if(!status)return;
   status.textContent='正在读取全服 BOSS 状态……';
-  const {data,error}=await db.from('world_boss_events').select('*').order('created_at',{ascending:false}).limit(1).maybeSingle();
+  const {data,error}=await db.from('world_boss_events').select('*').eq('show_to_players',true).order('created_at',{ascending:false}).limit(1).maybeSingle();
   if(error){status.innerHTML='暂时无法读取 BOSS：'+escapeHtml(error.message)+'。请先在 Supabase 执行随附 SQL。';return;}
   currentWorldBoss=data||null;
   const actions=document.getElementById('worldBossActions'),log=document.getElementById('worldBossLog'),reward=document.getElementById('worldBossReward');
-  if(!data){status.textContent='目前没有全服 BOSS 活动。';actions.innerHTML='';log.innerHTML='';reward.innerHTML='';return;}
+  if(!data){status.textContent='目前没有全服 BOSS 活动。';actions.innerHTML='';log.innerHTML='';reward.innerHTML='<p class="muted">当前没有对全服开放的 BOSS 活动。</p>';return;}
   const hp=Math.max(0,Number(data.current_hp)||0),max=Math.max(1,Number(data.max_hp)||1),ended=data.status!=='active';
   status.innerHTML='<b>🐉 '+escapeHtml(data.boss_name||'全服 BOSS')+'（Lv.'+(Number(data.boss_level)||1)+'）</b><p>'+ (ended?'活动已结束，可以领取参与奖励。':'活动进行中，快来贡献伤害！') +'</p><div class="stat">全服 HP：'+hp.toLocaleString()+' / '+max.toLocaleString()+'</div><div style="height:14px;background:#e5e0d6;border-radius:9px;overflow:hidden"><div style="height:100%;width:'+Math.max(0,Math.min(100,hp/max*100))+'%;background:#b3261e"></div></div><p class="small muted">开始时间：'+escapeHtml(data.started_at||data.created_at||'')+'｜状态：'+escapeHtml(data.status)+'</p>';
   actions.innerHTML=ended?'<button class="primary" onclick="claimWorldBossReward()">🎁 抽取 / 领取我的参与奖励</button>':'<button class="primary" onclick="attackWorldBoss()">⚔️ 参加讨伐（每日一次）</button>';
   const {data:logs}=await db.from('world_boss_logs').select('created_at,player_name,damage,roll_value,message').eq('event_id',data.id).order('created_at',{ascending:false}).limit(20);
   log.innerHTML=(logs||[]).length?(logs||[]).map(x=>'<div class="inventoryItem"><b>'+escapeHtml(x.player_name||'冒险者')+'</b>｜伤害 '+Number(x.damage||0)+'<div class="small muted">'+escapeHtml(x.message||('D100='+x.roll_value))+'｜'+escapeHtml(x.created_at||'')+'</div></div>').join(''):'<p class="muted">暂无讨伐记录。</p>';
-  const {data:mine,error:mineError}=await db.from('world_boss_participants').select('damage,reward_claimed').eq('event_id',data.id).eq('player_id',currentUser.id).maybeSingle();
+  const {data:mine,error:mineError}=await db.from('world_boss_participants').select('damage').eq('event_id',data.id).eq('player_id',currentUser.id).maybeSingle();
+  const {data:claim,error:claimError}=await db.from('world_boss_reward_claims').select('claimed_at').eq('event_id',data.id).eq('player_id',currentUser.id).maybeSingle();
   if(mineError){reward.innerHTML='<p class="err">读取个人参与记录失败：'+escapeHtml(mineError.message)+'</p>';actions.innerHTML='';}
-  else if(mine){reward.innerHTML='<div class="huntResult">你本次累计贡献伤害：'+Number(mine.damage||0)+'。'+(mine.reward_claimed?'奖励已领取。':ended?'活动结束后可领取奖励。':'你已参加本次讨伐，等待活动结束后领取奖励。')+'</div>';actions.innerHTML=(ended&&!mine.reward_claimed)?'<button class="primary" onclick="claimWorldBossReward()">🎁 抽取 / 领取我的参与奖励</button>':'';}
-  else{reward.innerHTML='<p class="muted">你尚未参与本次讨伐。只有造成过伤害的玩家可领取本次奖励。</p>';if(ended)actions.innerHTML='';}
+  else if(claimError){reward.innerHTML='<p class="err">读取奖励领取状态失败：'+escapeHtml(claimError.message)+'</p>';if(ended)actions.innerHTML='';}
+  else if(claim){reward.innerHTML='<div class="huntResult">本期 BOSS 奖励已经领取。'+(mine?'你本次累计贡献伤害：'+Number(mine.damage||0)+'。':'你本期没有参与讨伐。')+'</div>';actions.innerHTML='';}
+  else if(ended){reward.innerHTML='<div class="huntResult">'+(mine?'你本次累计贡献伤害：'+Number(mine.damage||0)+'。':'你本次没有参与讨伐。')+'<br>本期 BOSS 已结束，你仍然可以领取一次全服奖励。</div>';actions.innerHTML='<button class="primary" onclick="claimWorldBossReward()">🎁 领取本期 BOSS 奖励</button>';}
+  else{reward.innerHTML='<div class="huntResult">'+(mine?'你本次累计贡献伤害：'+Number(mine.damage||0)+'。':'你尚未参与本次讨伐。')+'<br>活动结束后即可领取一次全服奖励。</div>';}
   if(adminRefresh&&isAdmin()){const msg=document.getElementById('bossAdminMsg');if(msg)msg.textContent='已刷新最新活动状态。';}
 }
 async function attackWorldBoss(){
@@ -2397,17 +2402,45 @@ async function adminStartWorldBoss(){
   const drops=dropsRaw.split(/\r?\n/).map(line=>line.trim()).filter(Boolean).map(line=>{const parts=line.split('｜');return {name:(parts[0]||'').trim(),description:(parts.slice(1).join('｜')||'BOSS 活动掉落食材').trim()};}).filter(x=>x.name);
   if(!name||!Number.isInteger(level)||level<1||!Number.isInteger(hp)||hp<1){msg.textContent='请填写有效的名称、等级和总 HP。';return;}
   if(!drops.length){msg.textContent='请至少填写一种 BOSS 掉落食材。';msg.className='err';return;}
-  const {data,error}=await db.rpc('world_boss_admin_start',{p_boss_name:name,p_boss_level:level,p_max_hp:hp,p_reward_drops:drops});
+  const {data,error}=await db.rpc('world_boss_admin_start',{p_boss_name:name,p_boss_level:level,p_max_hp:hp});
   if(error){msg.textContent='开启失败：'+error.message+'。请先执行随附 SQL。';msg.className='err';return;}
-  msg.textContent='已开启全服 BOSS 活动，掉落食材已提交。';msg.className='ok';await loadWorldBoss(true);
+  if(!data?.id){msg.textContent='开启失败：数据库没有返回 BOSS 活动。';msg.className='err';return;}
+  const {error:dropError}=await db.from('world_boss_events').update({reward_drops:drops}).eq('id',data.id);
+  if(dropError){msg.textContent='BOSS 已开启，但掉落物写入失败：'+dropError.message;msg.className='err';return;}
+  msg.textContent='已开启全服 BOSS 活动，显示已自动开启。';msg.className='ok';await loadAdminWorldBoss();await loadWorldBoss(false);
 }
 async function adminEndWorldBoss(){
   if(!isAdmin())return alert('仅管理员可以操作。');
-  if(!currentWorldBoss){await loadWorldBoss(true);if(!currentWorldBoss)return alert('当前没有活动。');}
+  if(!currentWorldBossAdmin){await loadAdminWorldBoss();if(!currentWorldBossAdmin)return alert('当前没有活动。');}
   if(!confirm('确定提前结束当前 BOSS 并开放参与玩家领奖？'))return;
-  const {data,error}=await db.rpc('world_boss_admin_end',{p_event_id:currentWorldBoss.id});
+  const {data,error}=await db.rpc('world_boss_admin_end',{p_event_id:currentWorldBossAdmin.id});
   const msg=document.getElementById('bossAdminMsg');if(error){msg.textContent='结束失败：'+error.message;msg.className='err';return;}
-  msg.textContent='活动已结束，所有已参与玩家可各领取一次奖励。';msg.className='ok';await loadWorldBoss(true);
+  msg.textContent='活动已结束，所有玩家均可领取一次奖励。';msg.className='ok';await loadAdminWorldBoss();await loadWorldBoss(false);
+}
+async function loadAdminWorldBoss(){
+  if(!isAdmin())return;
+  const status=document.getElementById('bossVisibilityStatus'),btn=document.getElementById('bossVisibilityBtn');
+  if(status)status.textContent='正在读取最新 BOSS 活动……';
+  if(btn)btn.disabled=true;
+  const {data,error}=await db.from('world_boss_events').select('*').order('created_at',{ascending:false}).limit(1).maybeSingle();
+  if(error){if(status)status.innerHTML='读取失败：'+escapeHtml(error.message);if(btn)btn.textContent='读取失败';return;}
+  currentWorldBossAdmin=data||null;
+  if(!data){if(status)status.textContent='目前没有 BOSS 活动记录。';if(btn)btn.textContent='暂无活动';return;}
+  const visible=data.show_to_players!==false;
+  if(status)status.innerHTML='当前 BOSS：<b>'+escapeHtml(data.boss_name||'全服 BOSS')+'</b>｜状态：'+escapeHtml(data.status)+'｜全服显示：<b>'+(visible?'开启':'关闭')+'</b>';
+  if(btn){btn.disabled=false;btn.textContent=visible?'🔴 关闭 BOSS 全服显示':'🟢 开启 BOSS 全服显示';}
+}
+async function toggleWorldBossVisibility(){
+  if(!isAdmin())return alert('仅管理员可以操作。');
+  if(!currentWorldBossAdmin){await loadAdminWorldBoss();if(!currentWorldBossAdmin)return;}
+  const next=currentWorldBossAdmin.show_to_players===false;
+  const {data,error}=await db.rpc('world_boss_admin_set_visibility',{p_event_id:currentWorldBossAdmin.id,p_show:next});
+  const msg=document.getElementById('bossAdminMsg');
+  if(error){if(msg){msg.textContent='修改显示状态失败：'+error.message;msg.className='err';}return;}
+  currentWorldBossAdmin=data||currentWorldBossAdmin;
+  if(msg){msg.textContent=next?'BOSS 已对全服玩家显示。':'BOSS 已对全服玩家隐藏。';msg.className='ok';}
+  await loadAdminWorldBoss();
+  await loadWorldBoss(false);
 }
 async function adminGrantInventoryItem(){
   if(!isAdmin())return;
