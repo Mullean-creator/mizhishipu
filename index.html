@@ -328,7 +328,7 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
           <div class="grid"><div><label>BOSS 名称</label><input id="bossAdminName" value="深渊食灾龙"></div><div><label>BOSS 等级</label><input id="bossAdminLevel" type="number" min="1" value="1"></div><div><label>全服总 HP</label><input id="bossAdminHp" type="number" min="1" value="100000"></div></div>
           <label style="display:block;margin-top:10px">BOSS 可抽取的食材掉落（每行一项，格式：食材名称｜描述；不填写描述也可以）</label><textarea id="bossAdminDrops" rows="4" placeholder="深渊龙鳞｜坚硬的龙类素材
 灾厄龙肉｜蕴含强大魔力的肉类
-食灾核心｜稀有的BOSS核心"></textarea><p class="small muted">每位有贡献伤害的玩家在活动结束后可各自抽取一次；实际随机发放由 Supabase 奖励函数处理。</p>
+食灾核心｜稀有的BOSS核心"></textarea><p class="small muted">活动结束后，每位玩家均可领取一次随机奖励。</p>
           <div class="row" style="margin-top:10px"><button class="primary" onclick="adminStartWorldBoss()">🚩 开启新 BOSS 活动</button><button class="danger" onclick="adminEndWorldBoss()">⏹ 提前结束并结算</button><button class="secondary" onclick="loadAdminWorldBoss()">🔄 刷新状态</button></div>
           <div class="card" style="margin-top:12px"><h4>👁️ BOSS 全服显示</h4><p id="bossVisibilityStatus" class="muted">正在读取显示状态……</p><button id="bossVisibilityBtn" class="secondary" onclick="toggleWorldBossVisibility()" disabled>读取中…</button></div>
           <p id="bossAdminMsg" class="muted"></p>
@@ -518,9 +518,9 @@ const db=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 /* -------------------------------------------------------------
    👑 管理员邮箱配置 (在此填入允许开启 管理员 后台的账号邮箱)
    ------------------------------------------------------------- */
-const ADMIN_EMAILS = []; // 管理员现在由 Supabase 的 admins 表控制；此数组仅保留兼容，不再用于授权。
+const ADMIN_EMAILS = []; // 管理员权限由后台管理员名单控制；此数组仅保留兼容，不再用于授权。
 
-/* 旧版预设魔物已停用；魔物统一从 Supabase monsters 表读取。 */
+/* 旧版预设魔物已停用；魔物优先读取当前配置。 */
 const PRESET_MONSTERS = [];
 
 let currentUser=null;
@@ -565,7 +565,7 @@ async function signup(){
   const nickname=document.getElementById("nickname").value.trim();
   if(!email||!password||!username||!nickname)return msg("注册请填写完整。","err");
   const {error}=await db.auth.signUp({email,password,options:{data:{username,nickname}}});
-  if(error)return msg(error.message,"err");
+  if(error)return msg("操作未能完成，请检查填写内容后重试。","err");
   msg("注册成功！如需验证邮箱，请先完成验证后再登录。","ok");
 }
 
@@ -594,7 +594,7 @@ async function login(){
     const {data,error}=await db.auth.signInWithPassword({email,password});
     if(error){
       console.error("登录失败",error);
-      msg("登录失败："+(error.message||"邮箱或密码错误"),"err");
+      msg("登录失败，请检查邮箱和密码后重试。","err");
       return;
     }
     if(data?.user) currentUser=data.user;
@@ -614,7 +614,7 @@ async function logout(){
     const {error}=await db.auth.signOut({scope:"local"});
     if(error){
       console.error("退出失败",error);
-      showLogin("退出失败："+(error.message||"请稍后再试"));
+      showLogin("退出失败，请稍后再试。");
       return;
     }
     showLogin("已退出登录，可以再次输入邮箱和密码登录。");
@@ -698,7 +698,7 @@ async function loadAdventurer(){
   const {data,error}=await db.from("adventurers").select("*").eq("user_id",currentUser.id).maybeSingle();
 
   if(error){
-    document.getElementById("welcomeText").textContent="角色资料读取失败："+error.message;
+    document.getElementById("welcomeText").textContent="暂时无法读取角色资料，请刷新页面重试。";
     return;
   }
 
@@ -766,7 +766,7 @@ async function createAdventurer(){
   }).select().single();
 
   if(error){
-    document.getElementById("setupMsg").textContent="创建失败："+error.message;
+    document.getElementById("setupMsg").textContent="创建失败，请检查填写内容后重试。";
     document.getElementById("setupMsg").className="err";
     return;
   }
@@ -885,7 +885,7 @@ async function submitRecipe(){
   });
 
   if(error){
-    msgEl.textContent = "提交失败：" + error.message;
+    msgEl.textContent = "提交失败，请检查内容后重试。";
     msgEl.className = "err";
   }else{
     msgEl.textContent = "🎉 提交成功！请等待管理员审核。审核通过后将为你和全服解锁新地图！";
@@ -950,7 +950,7 @@ async function loadHuntData(){
   if(error){status.innerHTML="<span class='err'>读取地图失败："+escapeHtml(error.message)+"</span>";return;}
   maps=data||[];
   if(!maps.length){
-    // 如果数据库为空，填充默认示例地图
+    // 如果尚无地图配置，填充默认示例地图
     maps = [
       { id: 1, region_key:"town", region_name: "美食镇", description: "香气扑鼻的新手城镇。", danger_level: 0, icon: "🏘️" },
       { id: 2, region_key:"rainforest", region_name: "幽毒雨林", description: "潮湿幽深、弥漫毒雾的雨林。", danger_level: 1, icon: "🌳" },
@@ -1003,7 +1003,7 @@ async function selectMap(id){
 
   await refreshTeam();
 
-  // 优先读取当前地区在 Supabase 中配置的魔物与掉落；仅在数据库没有该地区魔物时使用兼容预设。
+  // 优先读取当前地区配置的魔物与掉落；仅在没有配置时使用兼容预设。
   const {data: regionMonsters, error: monsterError} = await db
     .from("monsters").select("*").eq("region_id", selectedMap.id).order("id", {ascending:true});
   if (monsterError) console.warn("读取地区魔物失败，尝试兼容预设：", monsterError.message);
@@ -1152,7 +1152,7 @@ async function refreshTeam(){
     .eq("player_id",currentUser.id);
 
   if(error){
-    msg.textContent="组队读取失败："+error.message;
+    msg.textContent="暂时无法读取队伍信息，请稍后重试。";
     activeTeam=null; teamMembers=[];
     renderTeamMembers();
     return;
@@ -1228,11 +1228,11 @@ async function createHuntTeam(){
   const {data,error}=await db.from("hunt_teams")
     .insert({leader_id:currentUser.id,code,status:"active"})
     .select().single();
-  if(error){ msg.textContent="创建失败："+error.message; return; }
+  if(error){ msg.textContent="创建失败，请检查填写内容后重试。"; return; }
 
   const {error:e2}=await db.from("hunt_team_members")
     .insert({team_id:data.id,player_id:currentUser.id,member_name:name});
-  if(e2){ msg.textContent="队伍已创建，但加入成员失败："+e2.message; return; }
+  if(e2){ msg.textContent="队伍已创建，但暂时无法加入成员，请稍后重试。"; return; }
 
   activeTeam=data;
   await loadTeamMembers(data.id);
@@ -1255,7 +1255,7 @@ async function joinHuntTeam(){
   const name=currentAdventurer?.name||"无名冒险者";
   const {error:e}=await db.from("hunt_team_members")
     .insert({team_id:data.id,player_id:currentUser.id,member_name:name});
-  if(e){ msg.textContent="加入失败："+e.message; return; }
+  if(e){ msg.textContent="加入队伍失败，请稍后重试。"; return; }
 
   activeTeam=data;
   await loadTeamMembers(data.id);
@@ -1299,7 +1299,7 @@ async function startBattle(){
     .select().single();
   if(apError||!apData){
     const e=document.getElementById("huntModalMsg");
-    if(e){e.textContent="无法扣除行动点，战斗没有开始："+(apError?.message||"未知错误");e.className="err";}
+    if(e){e.textContent="暂时无法开始狩猎，请稍后重试。";e.className="err";}
     return;
   }
   currentAdventurer=apData;
@@ -1474,7 +1474,7 @@ async function useBattlePotion(){
   const oldCount=getItemCount(item);
   const newCount=Math.max(0,oldCount-1);
   const {error:updateError}=await db.from("inventory").update({item_count:newCount}).eq("id",item.id).eq("player_id",currentUser.id);
-  if(updateError){addBattleLog("❌ 血药使用失败："+updateError.message,true);return false;}
+  if(updateError){addBattleLog("❌ 血药使用失败，请稍后重试。",true);return false;}
   const potion=SHOP_POTIONS.find(x=>x.name===item.item_name);
   const marker=String(item.item_desc||'').match(/^MZ_POTION\|(\d+)/);
   const healAmount=potion?.heal||Number(marker?.[1])||30;
@@ -1636,7 +1636,7 @@ async function finishBattle(win){
     action_points:oldMaxAP>=9999?oldAP:Math.min(newMaxAP,oldAP+Math.max(0,newMaxAP-oldMaxAP))
   };
   if(levelUps.length){
-    // 每次升级，六项基础属性各 +1；与数据库现有属性列对应。
+    // 每次升级，六项基础属性各 +1。
     for(const key of ["technique","endurance","taste","magic_sense","smell","proficiency"]){
       statUpdates[key]=Math.max(0,Number(currentAdventurer?.[key])||0)+levelUps.length;
     }
@@ -1648,8 +1648,8 @@ async function finishBattle(win){
   battle.expSaved=!rewardError&&!!rewardData;
   let levelText="";
   if(rewardError){
-    addBattleLog("⚠️ 魔物已击败，但经验/金币保存失败："+rewardError.message,true);
-    levelText="\n⚠️ 经验和金币未能保存，请检查数据库经验字段是否已添加。";
+    addBattleLog("⚠️ 魔物已击败，但经验和金币暂时没有结算，请联系管理员处理。",true);
+    levelText="\n（经验结算暂时没有保存成功，请稍后查看角色面板。）";
   }else if(rewardData){
     currentAdventurer=rewardData;
     if(levelUps.length){
@@ -1722,7 +1722,7 @@ async function rollLoot(){
     quantity=min+Math.floor(((effectiveRoll-1)/20)*(max-min+1));
     quantity=Math.min(max,Math.max(min,quantity));
     const saved=await addInventoryItem(chosen.item_name,chosen.item_desc??"魔物掉落素材",quantity);
-    obtained.push(saved?`📦 ${chosen.item_name} ×${quantity}`:`📦 ${chosen.item_name} ×${quantity}（写入背包失败，请检查 inventory 表权限）`);
+    obtained.push(saved?`📦 ${chosen.item_name} ×${quantity}`:`📦 ${chosen.item_name} ×${quantity}（暂未放入背包，请联系管理员处理）`);
   }else obtained.push("⚠️ 该魔物没有配置掉落素材。");
   lines.push("\n🎁 获得：",...obtained,"\n⚡ 剩余 AP："+(currentAdventurer?.action_points??0));
   document.getElementById("lootRollResult").textContent=lines.join("\n");
@@ -1811,8 +1811,8 @@ async function signin(){
   if(isResting()){alert("你正在客栈休息，AP 回满并结束休息后才能签到。");return;}
   const e=document.getElementById("signinMsg");
   const {data,error}=await db.rpc("daily_signin");
-  if(error){e.textContent=error.message;e.className="err";return}
-  if(data===-1){e.textContent="今天已经签到过啦！";return}
+  if(error){e.textContent="暂时无法完成操作，请稍后重试。";e.className="err";return}
+  if(data===-1){e.textContent="今天已经签到过啦，明天再来领取奖励吧！";return}
   e.textContent="签到成功！当前金币："+data;e.className="ok";
   await loadAdventurer();
 }
@@ -1882,7 +1882,7 @@ async function cancelRest(){
   const ap=Math.max(0,Number(currentAdventurer.action_points)||0),max=Math.max(5,Number(currentAdventurer.max_action_points)||5);
   if(ap<max){alert('行动点还没有回满，请继续休息。');renderRestStatus();return;}
   const {data,error}=await db.from('adventurers').update({last_rest:null}).eq('user_id',currentUser.id).select().single();
-  if(error||!data){alert('结束休息失败：'+(error?.message||'未知错误'));return;}
+  if(error||!data){alert('结束休息失败，请稍后重试。');return;}
   currentAdventurer=data;renderRestStatus();
   const e=document.getElementById('restMsg');if(e){e.textContent='休息已结束，可以继续行动了。';e.className='ok';}
 }
@@ -1937,7 +1937,7 @@ async function loadAdminPlayers(){
   const {data,error}=await db.from("adventurers").select("*").order("name",{ascending:true});
   if(error||!data){
     selects.forEach(s=>{if(s)s.innerHTML="<option>获取玩家失败</option>";});
-    document.getElementById("adminPlayerMsg").textContent="读取玩家失败："+(error?.message||"未知错误");
+    document.getElementById("adminPlayerMsg").textContent="暂时无法读取玩家名单，请稍后重试。";
     return;
   }
   allAdventurersList=data;
@@ -1988,7 +1988,7 @@ async function saveAdminPlayerData(){
   const updates=collectAdminFields("adm_");
   if(!updates.name){msgEl.textContent="角色名字不能为空。";msgEl.className="err";return;}
   const {data,error}=await db.from("adventurers").update(updates).eq("user_id",uid).select().single();
-  if(error){msgEl.textContent="保存失败："+error.message;msgEl.className="err";return;}
+  if(error){msgEl.textContent="保存失败，请稍后重试。";msgEl.className="err";return;}
   msgEl.textContent="✅ 玩家数据已保存。";msgEl.className="ok";
   allAdventurersList=allAdventurersList.map(x=>x.user_id===uid?data:x);
   if(uid===currentUser.id){currentAdventurer=data;await loadPanel();}
@@ -2017,7 +2017,7 @@ async function saveAdminSelfData(){
   const msg=document.getElementById("adminSelfMsg");
   const updates=collectAdminFields("self_");
   const {data,error}=await db.from("adventurers").update(updates).eq("user_id",currentUser.id).select().single();
-  if(error){msg.textContent="保存失败："+error.message;msg.className="err";return;}
+  if(error){msg.textContent="保存失败，请稍后重试。";msg.className="err";return;}
   currentAdventurer=data;
   msg.textContent="✅ 我的 管理员 数据已保存。";msg.className="ok";
   await loadPanel();
@@ -2034,7 +2034,7 @@ async function loadAdminRecipes(){
   if(!box)return;
   box.innerHTML="<p class='muted'>读取料理提交中……</p>";
   const {data,error}=await db.from("recipe_submissions").select("*").order("created_at",{ascending:false});
-  if(error){box.innerHTML=`<p class='err'>读取失败：${escapeHtml(error.message)}</p>`;return;}
+  if(error){box.innerHTML=`<p class='err'>暂时无法读取内容，请稍后重试。</p>`;return;}
   if(!data?.length){box.innerHTML="<p class='muted'>目前暂无料理提交记录。</p>";return;}
   box.innerHTML=data.map(r=>{
     const pending=r.status==="pending";
@@ -2063,9 +2063,9 @@ async function approveRecipe(recipeId){
   if(!mapToUnlock){alert("这条料理没有指定申请解锁地图，无法自动解锁。");return;}
   if(!confirm(`确定通过「${recipe.recipe_name}」并给玩家「${recipe.author_name||"未知玩家"}」解锁「${mapToUnlock}」吗？`))return;
   const {error:updateError}=await db.from("recipe_submissions").update({status:"approved",unlocked_map_name:mapToUnlock,reviewed_by:currentUser.id,reviewed_at:new Date().toISOString()}).eq("id",recipeId);
-  if(updateError){alert("审核保存失败："+updateError.message);return;}
+  if(updateError){alert("审核未能保存，请稍后重试。");return;}
   const {error:mapError}=await db.from("player_unlocked_maps").upsert({user_id:recipe.user_id,map_name:mapToUnlock,unlocked_by_recipe:recipeId,unlocked_by:currentUser.id},{onConflict:"user_id,map_name"});
-  if(mapError){alert("料理已通过，但地图解锁失败："+mapError.message);await loadAdminRecipes();return;}
+  if(mapError){alert("料理已通过，但地图暂时没有解锁，请稍后重试。");await loadAdminRecipes();return;}
   alert(`审核通过！已给「${recipe.author_name||"该玩家"}」解锁：${mapToUnlock}`);
   await loadAdminRecipes();
 }
@@ -2074,7 +2074,7 @@ async function rejectRecipe(recipeId){
   if(!isAdmin())return;
   const reason=prompt("可以填写驳回原因（可留空）：","");
   const {error}=await db.from("recipe_submissions").update({status:"rejected",reviewed_by:currentUser.id,reviewed_at:new Date().toISOString()}).eq("id",recipeId);
-  if(error){alert("驳回失败："+error.message);return;}
+  if(error){alert("驳回未能完成，请稍后重试。");return;}
   await loadAdminRecipes();
 }
 
@@ -2088,7 +2088,7 @@ async function loadAdminPlayerMaps(initial=false){
   const box=document.getElementById("adminPlayerMaps");
   if(!box)return;
   const {data,error}=await db.from("player_unlocked_maps").select("*").eq("user_id",uid).order("map_name");
-  if(error){box.innerHTML=`<p class='err'>读取地图权限失败：${escapeHtml(error.message)}</p>`;return;}
+  if(error){box.innerHTML=`<p class='err'>暂时无法读取地图解锁情况，请稍后重试。</p>`;return;}
   const unlocked=new Set((data||[]).map(x=>x.map_name));
   const {data:allMaps}=await db.from("game_regions").select("*").order("id",{ascending:true});
   let mapsForAdmin=allMaps||[];
@@ -2105,7 +2105,7 @@ async function grantPlayerMap(uid,mapNameValue){
   if(!uid||!mapNameValue)return;
   if(!confirm(`确定给该玩家解锁「${mapNameValue}」吗？`))return;
   const {error}=await db.from("player_unlocked_maps").upsert({user_id:uid,map_name:mapNameValue,unlocked_by:currentUser.id},{onConflict:"user_id,map_name"});
-  if(error){alert("解锁失败："+error.message);return;}
+  if(error){alert("解锁未能完成，请稍后重试。");return;}
   alert("地图解锁成功："+mapNameValue);
   await loadAdminPlayerMaps();
 }
@@ -2142,7 +2142,7 @@ function townOpen(type){
   box.innerHTML='<p>请选择美食镇设施。</p>';
 }
 
-// ================= 商店与装备系统（使用现有 inventory/adventurers 表，不新增数据库字段） =================
+// ================= 商店与装备系统 =================
 const SHOP_POTIONS=[
   {name:'小型恢复药剂',price:10,heal:20,desc:'恢复最多 20 HP。'},
   {name:'中型恢复药剂',price:25,heal:50,desc:'恢复最多 50 HP。'},
@@ -2203,7 +2203,7 @@ async function loadShop(kind='mystery'){
   if(!currentAdventurer){box.innerHTML='<p class="err">请先创建冒险者档案。</p>';return;}
   const unlocked=await playerUnlockedMapNames();
   const {data:inv,error:invErr}=await db.from('inventory').select('*').eq('player_id',currentUser.id).order('id',{ascending:true});
-  if(invErr){box.innerHTML='<p class="err">读取背包失败：'+escapeHtml(invErr.message)+'</p>';return;}
+  if(invErr){box.innerHTML='<p class="err">暂时无法读取背包，请稍后重试。</p>';return;}
   const {data:drops}=await db.from('monster_drops').select('item_name,is_rare');
   const rareNames=new Set((drops||[]).filter(x=>x.is_rare).map(x=>x.item_name));
   const gearNames=new Set(EQUIPMENT_CATALOG.map(x=>x.name));
@@ -2228,7 +2228,7 @@ async function buyAttributePack(key,currency='coins'){
   const lockKey='attribute-'+key+'-'+currency;if(window[lockKey])return;window[lockKey]=true;
   try{
     const {data:inv,error:invError}=await db.from('inventory').select('*').eq('player_id',currentUser.id).order('id',{ascending:true});
-    if(invError){alert('读取背包失败：'+invError.message);return;}
+    if(invError){alert('暂时无法读取背包，请稍后重试。');return;}
     if(currency!=='coins'){alert('属性礼包目前仅支持金币购买。');return;}
     const coins=Number(currentAdventurer.coins)||0;if(coins<pack.price){alert(`金币不足！购买需要 ${pack.price} 金币，你目前有 ${coins}。`);return;}
     const statKeys=['technique','endurance','taste','magic_sense','smell','proficiency'];
@@ -2237,13 +2237,13 @@ async function buyAttributePack(key,currency='coins'){
     let oldCoins=Number(currentAdventurer.coins)||0;
     if(currency==='coins'){
       const {data:paid,error:payError}=await db.from('adventurers').update({coins:oldCoins-pack.price}).eq('user_id',currentUser.id).select().single();
-      if(payError||!paid){alert('金币扣款失败：'+(payError?.message||'未返回玩家资料'));return;}currentAdventurer=paid;
+      if(payError||!paid){alert('金币扣款失败，请稍后重试。');return;}currentAdventurer=paid;
     }
     const oldValue=Number(currentAdventurer[pack.key])||0;
     const {data:updated,error:updateError}=await db.from('adventurers').update({[pack.key]:oldValue+pack.amount}).eq('user_id',currentUser.id).select().single();
     if(updateError||!updated){
       if(currency==='coins'){const refund=await db.from('adventurers').update({coins:oldCoins}).eq('user_id',currentUser.id).select().single();if(refund.data)currentAdventurer=refund.data;}
-      alert('属性增加失败，已尝试退还支付：'+(updateError?.message||'未返回玩家资料'));return;
+      alert('属性增加失败，已尝试退还金币，请稍后重试。');return;
     }
     currentAdventurer=updated;alert(`购买成功！${pack.stat} +${pack.amount}。`);await loadPanel();await loadShop('mystery');
   }finally{window[lockKey]=false;}
@@ -2258,7 +2258,7 @@ async function buyShopItem(name){
   const buttonKey='buy-'+name;if(window[buttonKey])return;window[buttonKey]=true;
   try{
     const {data:updated,error:coinError}=await db.from('adventurers').update({coins:coins-item.price}).eq('user_id',currentUser.id).select().single();
-    if(coinError||!updated){alert('扣款失败：'+(coinError?.message||'未返回玩家资料'));return;}
+    if(coinError||!updated){alert('扣款失败，请稍后重试。');return;}
     currentAdventurer=updated;
     let writeError=null;
     const {data:existing,error:readError}=await db.from('inventory').select('id,item_count,item_desc').eq('player_id',currentUser.id).eq('item_name',name).limit(1);
@@ -2271,7 +2271,7 @@ async function buyShopItem(name){
     }
     if(writeError){
       const refund=await db.from('adventurers').update({coins:coins}).eq('user_id',currentUser.id).select().single();if(refund.data)currentAdventurer=refund.data;
-      alert('购买写入背包失败，已尝试退还金币：'+writeError.message);return;
+      alert('购买未能完成，已尝试退还金币，请检查背包后重试。');return;
     }
     alert('购买成功：'+name+'！');await loadPanel();await loadShop('gear');await loadShop('potions');await loadShop('mystery');
   }finally{window[buttonKey]=false;}
@@ -2282,18 +2282,18 @@ async function sellMaterial(id,quantity){
   const lockKey='sell-'+String(id);if(window[lockKey])return;window[lockKey]=true;
   try{
     const {data:item,error}=await db.from('inventory').select('*').eq('id',id).eq('player_id',currentUser.id).maybeSingle();
-    if(error||!item){alert('读取素材失败：'+(error?.message||'物品不存在或无权读取'));return;}
+    if(error||!item){alert('暂时无法读取这份素材，请刷新背包后重试。');return;}
     if(parseEquipmentMeta(item)||SHOP_POTIONS.some(x=>x.name===item.item_name)||ATTRIBUTE_PACKS.some(x=>x.name===item.item_name)){alert('装备、恢复药剂与属性礼包不能出售。');return;}
     const count=getItemCount(item),qty=Math.max(1,Math.min(count,Math.floor(Number(quantity)||1)));if(count<1||qty<1){alert('没有可出售的数量。');return;}
     const {data:drops,error:dropError}=await db.from('monster_drops').select('item_name,is_rare').eq('item_name',item.item_name).limit(1);
-    if(dropError){alert('读取素材价格失败：'+dropError.message+'。为避免误扣背包物品，本次未出售。');return;}
+    if(dropError){alert('暂时无法确认这份素材的回收价格，本次没有出售。请稍后重试。');return;}
     const price=drops?.some(x=>x.is_rare)?20:5,total=price*qty;
     const soldEntireStack=qty===count;
     let inventoryMutationError=null,inventoryChanged=false;
 
     if(soldEntireStack){
       // 全部出售：直接删除整条背包记录。不要再做删除后的二次 SELECT，
-      // 避免 RLS/网络延迟导致页面卡住并误报“扣除失败”。
+      // 避免网络延迟导致页面卡住并误报“扣除失败”。
       const {error:deleteError}=await db.from('inventory').delete()
         .eq('id',id).eq('player_id',currentUser.id).eq('item_count',count);
       inventoryMutationError=deleteError;
@@ -2308,7 +2308,7 @@ async function sellMaterial(id,quantity){
     }
 
     if(inventoryMutationError||!inventoryChanged){
-      alert('扣除素材失败：'+(inventoryMutationError?.message||'背包记录没有更新，可能是权限策略限制或数量已变化'));return;
+      alert('素材暂时没有扣除，请刷新背包后重试。');return;
     }
 
     // 后续金币操作失败时恢复背包。
@@ -2324,13 +2324,13 @@ async function sellMaterial(id,quantity){
     const {data:latest,error:readCoinsError}=await db.from('adventurers').select('coins').eq('user_id',currentUser.id).maybeSingle();
     if(readCoinsError||!latest){
       const rollbackError=await restoreInventory();
-      alert('读取当前金币失败：'+(readCoinsError?.message||'未找到玩家档案')+(rollbackError?'；恢复背包失败，请联系管理员核对。':'；已尝试恢复素材数量。'));return;
+      alert('暂时无法完成出售，请刷新背包后检查物品数量；如仍异常，请联系管理员。');return;
     }
     const coins=(Number(latest.coins)||0)+total;
     const {data:updated,error:coinError}=await db.from('adventurers').update({coins}).eq('user_id',currentUser.id).select().maybeSingle();
     if(coinError||!updated){
       const rollbackError=await restoreInventory();
-      alert('金币入账失败：'+(coinError?.message||'玩家资料没有更新')+(rollbackError?'；恢复素材数量失败，请联系管理员核对背包。':'；已尝试恢复素材数量。'));return;
+      alert('金币暂时没有到账，请联系管理员核对。'+(rollbackError?'；恢复素材数量失败，请联系管理员核对背包。':'；已尝试恢复素材数量。'));return;
     }
     currentAdventurer=updated;
     alert(`出售成功：${item.item_name} ×${qty}，获得 ${total} 金币。`);
@@ -2345,10 +2345,10 @@ async function getEquippedBonuses(){
 async function equipItem(id){
   if(isResting()){alert("你正在客栈休息，AP 回满并结束休息后才能更换装备。");return;}
   const rows=await getInventoryRows();const selected=rows.find(x=>String(x.id)===String(id));const meta=parseEquipmentMeta(selected);if(!selected||!meta){alert('找不到这件装备。');return;}
-  for(const row of rows){const e=parseEquipmentMeta(row);if(!e||e.slot!==meta.slot)continue;const next=equipmentMarker({slot:e.slot,attack:e.attack,defense:e.defense},String(row.id)===String(id));if(row.item_desc!==next){const {error}=await db.from('inventory').update({item_desc:next}).eq('id',row.id).eq('player_id',currentUser.id);if(error){alert('装备穿戴失败：'+error.message);return;}}}
+  for(const row of rows){const e=parseEquipmentMeta(row);if(!e||e.slot!==meta.slot)continue;const next=equipmentMarker({slot:e.slot,attack:e.attack,defense:e.defense},String(row.id)===String(id));if(row.item_desc!==next){const {error}=await db.from('inventory').update({item_desc:next}).eq('id',row.id).eq('player_id',currentUser.id);if(error){alert('装备穿戴失败，请稍后重试。');return;}}}
   await loadEquipment();await loadInventory();await loadPanel();
 }
-async function unequipItem(id){if(isResting()){alert("你正在客栈休息，AP 回满并结束休息后才能更换装备。");return;}const rows=await getInventoryRows();const row=rows.find(x=>String(x.id)===String(id));const e=parseEquipmentMeta(row);if(!row||!e)return;const {error}=await db.from('inventory').update({item_desc:equipmentMarker({slot:e.slot,attack:e.attack,defense:e.defense},false)}).eq('id',id).eq('player_id',currentUser.id);if(error){alert('卸下失败：'+error.message);return;}await loadEquipment();await loadInventory();await loadPanel();}
+async function unequipItem(id){if(isResting()){alert("你正在客栈休息，AP 回满并结束休息后才能更换装备。");return;}const rows=await getInventoryRows();const row=rows.find(x=>String(x.id)===String(id));const e=parseEquipmentMeta(row);if(!row||!e)return;const {error}=await db.from('inventory').update({item_desc:equipmentMarker({slot:e.slot,attack:e.attack,defense:e.defense},false)}).eq('id',id).eq('player_id',currentUser.id);if(error){alert('卸下失败，请稍后重试。');return;}await loadEquipment();await loadInventory();await loadPanel();}
 async function loadEquipment(){
   const summary=document.getElementById('equippedSummary'),box=document.getElementById('equipmentInventory');if(!summary||!box||!currentUser)return;
   summary.textContent='正在读取装备……';box.innerHTML='';
@@ -2375,7 +2375,7 @@ async function loadWorldBoss(adminRefresh=false){
   // 先读取最新一条活动记录，再检查显示开关；不能只查询 show_to_players=true，
   // 否则最新活动被隐藏时，旧活动可能会错误地重新出现。
   const {data,error}=await db.from('world_boss_events').select('*').order('created_at',{ascending:false}).limit(1).maybeSingle();
-  if(error){currentWorldBoss=null;actions.innerHTML='';log.innerHTML='';reward.innerHTML='';status.innerHTML='暂时无法读取 BOSS：'+escapeHtml(error.message)+'。';return;}
+  if(error){currentWorldBoss=null;actions.innerHTML='';log.innerHTML='';reward.innerHTML='';status.innerHTML='暂时无法读取 BOSS 活动，请稍后重试。';return;}
   const visible=!!data && data.show_to_players!==false;
   if(!data || !visible){
     currentWorldBoss=null;
@@ -2404,13 +2404,13 @@ async function attackWorldBoss(){
   if(isResting()){alert('你正在客栈休息，结束休息后才能参加讨伐。');return;}
   if(!currentUser||!currentWorldBoss){alert('当前没有可挑战的 BOSS。');return;}
   const {data,error}=await db.rpc('world_boss_attack',{p_event_id:currentWorldBoss.id});
-  if(error){alert('讨伐失败：'+error.message+'。请确认已执行随附 SQL。');return;}
+  if(error){alert('讨伐没有成功，请稍后再试。');return;}
   alert(data?.message||'讨伐结算完成！');await loadWorldBoss(false);
 }
 async function claimWorldBossReward(){
   if(!currentUser||!currentWorldBoss)return;
   const {data,error}=await db.rpc('world_boss_claim_reward',{p_event_id:currentWorldBoss.id});
-  if(error){alert('领取失败：'+error.message+'。');return;}
+  if(error){alert('领取失败，请稍后重试；如果仍无法领取，请联系管理员。');return;}
   alert(data?.message||'奖励领取完成！');await loadWorldBoss(false);await loadInventory();
 }
 async function adminStartWorldBoss(){
@@ -2420,14 +2420,14 @@ async function adminStartWorldBoss(){
   const drops=dropsRaw.split(/\r?\n/).map(line=>line.trim()).filter(Boolean).map(line=>{const parts=line.split('｜');return {name:(parts[0]||'').trim(),description:(parts.slice(1).join('｜')||'BOSS 活动掉落食材').trim()};}).filter(x=>x.name);
   if(!name||!Number.isInteger(level)||level<1||!Number.isInteger(hp)||hp<1){msg.textContent='请填写有效的名称、等级和总 HP。';return;}
   if(!drops.length){msg.textContent='请至少填写一种 BOSS 掉落食材。';msg.className='err';return;}
-  // 将食材名单直接交给四参数 RPC，在数据库创建活动时一并保存，避免客户端 UPDATE 被 RLS 拦截。
+  // 创建 BOSS 活动时一并保存掉落食材。
   const {data,error}=await db.rpc('world_boss_admin_start',{p_boss_name:name,p_boss_level:level,p_max_hp:hp,p_reward_drops:drops});
-  if(error){msg.textContent='开启失败：'+error.message+'。请确认数据库已安装带 p_reward_drops 参数的 world_boss_admin_start 函数。';msg.className='err';return;}
-  if(!data?.id){msg.textContent='开启失败：数据库没有返回 BOSS 活动。';msg.className='err';return;}
-  // 验证数据库确实返回已保存的食材；不静默地开启一个没有奖励的 BOSS。
+  if(error){msg.textContent='开启失败，请检查名称、等级、总 HP 和掉落食材后重试。';msg.className='err';return;}
+  if(!data?.id){msg.textContent='开启失败，请稍后重试。';msg.className='err';return;}
+  // 确认掉落食材已保存，避免开启没有奖励的 BOSS。
   const {data:verifyData,error:verifyError}=await db.from('world_boss_events').select('reward_drops').eq('id',data.id).maybeSingle();
   if(verifyError || !Array.isArray(verifyData?.reward_drops) || !verifyData.reward_drops.some(x=>String(x?.name||'').trim())){
-    msg.textContent='BOSS 创建请求已提交，但数据库未能确认有效食材名单。请检查管理员读取权限或数据库函数；请勿重复开启。';msg.className='err';return;
+    msg.textContent='暂时无法确认 BOSS 是否开启成功。请先刷新活动状态，确认后再决定是否重新开启。';msg.className='err';return;
   }
   msg.textContent='已开启全服 BOSS 活动，显示已自动开启。';msg.className='ok';await loadAdminWorldBoss();await loadWorldBoss(false);
 }
@@ -2436,7 +2436,7 @@ async function adminEndWorldBoss(){
   if(!currentWorldBossAdmin){await loadAdminWorldBoss();if(!currentWorldBossAdmin)return alert('当前没有活动。');}
   if(!confirm('确定提前结束当前 BOSS 并开放参与玩家领奖？'))return;
   const {data,error}=await db.rpc('world_boss_admin_end',{p_event_id:currentWorldBossAdmin.id});
-  const msg=document.getElementById('bossAdminMsg');if(error){msg.textContent='结束失败：'+error.message;msg.className='err';return;}
+  const msg=document.getElementById('bossAdminMsg');if(error){msg.textContent='结束活动失败，请稍后重试。';msg.className='err';return;}
   msg.textContent='活动已结束，所有玩家均可领取一次奖励。';msg.className='ok';await loadAdminWorldBoss();await loadWorldBoss(false);
 }
 async function loadAdminWorldBoss(){
@@ -2445,7 +2445,7 @@ async function loadAdminWorldBoss(){
   if(status)status.textContent='正在读取最新 BOSS 活动……';
   if(btn)btn.disabled=true;
   const {data,error}=await db.from('world_boss_events').select('*').order('created_at',{ascending:false}).limit(1).maybeSingle();
-  if(error){if(status)status.innerHTML='读取失败：'+escapeHtml(error.message);if(btn)btn.textContent='读取失败';return;}
+  if(error){if(status)status.innerHTML='暂时无法读取内容，请稍后重试。';if(btn)btn.textContent='读取失败';return;}
   currentWorldBossAdmin=data||null;
   if(!data){if(status)status.textContent='目前没有 BOSS 活动记录。';if(btn)btn.textContent='暂无活动';return;}
   const visible=data.show_to_players!==false;
@@ -2458,7 +2458,7 @@ async function toggleWorldBossVisibility(){
   const next=currentWorldBossAdmin.show_to_players===false;
   const {data,error}=await db.rpc('world_boss_admin_set_visibility',{p_event_id:currentWorldBossAdmin.id,p_show:next});
   const msg=document.getElementById('bossAdminMsg');
-  if(error){if(msg){msg.textContent='修改显示状态失败：'+error.message;msg.className='err';}return;}
+  if(error){if(msg){msg.textContent='修改显示状态失败，请稍后重试。';msg.className='err';}return;}
   currentWorldBossAdmin=data||currentWorldBossAdmin;
   if(msg){msg.textContent=next?'BOSS 已对全服玩家显示。':'BOSS 已对全服玩家隐藏。';msg.className='ok';}
   await loadAdminWorldBoss();
@@ -2469,7 +2469,7 @@ async function adminGrantInventoryItem(){
   const uid=document.getElementById('adminPlayerSelect')?.value,name=document.getElementById('adminGrantItemName').value.trim(),count=Number(document.getElementById('adminGrantItemCount').value),desc=document.getElementById('adminGrantItemDesc').value.trim(),msg=document.getElementById('adminGrantItemMsg');
   if(!uid||!name||!Number.isInteger(count)||count<1){msg.textContent='请选择玩家，填写物品名称和正整数数量。';msg.className='err';return;}
   const {data,error}=await db.rpc('admin_grant_inventory_item',{p_player_id:uid,p_item_name:name,p_item_count:count,p_item_desc:desc});
-  if(error){msg.textContent='发放失败：'+error.message+'。请先执行随附 SQL。';msg.className='err';return;}
+  if(error){msg.textContent='发放失败，请稍后重试；如果仍未成功，请联系管理员。';msg.className='err';return;}
   msg.textContent='已向所选玩家发放 '+name+' ×'+count+'。';msg.className='ok';
 }
 
