@@ -2270,18 +2270,31 @@ async function buyShopItem(name){
 async function sellMaterial(id,quantity){
   if(isResting()){alert("你正在客栈休息，AP 回满并结束休息后才能出售素材。");return;}
   if(!currentUser||!currentAdventurer)return;
-  const {data:item,error}=await db.from('inventory').select('*').eq('id',id).eq('player_id',currentUser.id).maybeSingle();
-  if(error||!item){alert('读取素材失败：'+(error?.message||'物品不存在'));return;}
-  if(parseEquipmentMeta(item)||SHOP_POTIONS.some(x=>x.name===item.item_name)||ATTRIBUTE_PACKS.some(x=>x.name===item.item_name)){alert('装备、恢复药剂与属性礼包不能出售。');return;}
-  const count=getItemCount(item),qty=Math.max(1,Math.min(count,Number(quantity)||1));if(qty<1){alert('没有可出售的数量。');return;}
-  const {data:drops}=await db.from('monster_drops').select('item_name,is_rare').eq('item_name',item.item_name).limit(1);
-  const price=drops?.[0]?.is_rare?20:5;const total=price*qty;
-  const {error:updateError}=await db.from('inventory').update({item_count:count-qty}).eq('id',id).eq('player_id',currentUser.id);
-  if(updateError){alert('出售失败：'+updateError.message);return;}
-  const coins=(Number(currentAdventurer.coins)||0)+total;
-  const {data:updated,error:coinError}=await db.from('adventurers').update({coins}).eq('user_id',currentUser.id).select().single();
-  if(coinError||!updated){await db.from('inventory').update({item_count:count}).eq('id',id).eq('player_id',currentUser.id);alert('金币入账失败，素材数量已尝试恢复：'+(coinError?.message||'未知错误'));return;}
-  currentAdventurer=updated;alert(`出售成功：${item.item_name} ×${qty}，获得 ${total} 金币。`);await loadInventory();await loadEquipment();await loadShop();await loadPanel();
+  const lockKey='sell-'+String(id);if(window[lockKey])return;window[lockKey]=true;
+  try{
+    const {data:item,error}=await db.from('inventory').select('*').eq('id',id).eq('player_id',currentUser.id).maybeSingle();
+    if(error||!item){alert('读取素材失败：'+(error?.message||'物品不存在或无权读取'));return;}
+    if(parseEquipmentMeta(item)||SHOP_POTIONS.some(x=>x.name===item.item_name)||ATTRIBUTE_PACKS.some(x=>x.name===item.item_name)){alert('装备、恢复药剂与属性礼包不能出售。');return;}
+    const count=getItemCount(item),qty=Math.max(1,Math.min(count,Math.floor(Number(quantity)||1)));if(count<1||qty<1){alert('没有可出售的数量。');return;}
+    const {data:drops,error:dropError}=await db.from('monster_drops').select('item_name,is_rare').eq('item_name',item.item_name).limit(1);
+    if(dropError){alert('读取素材价格失败：'+dropError.message+'。为避免误扣背包物品，本次未出售。');return;}
+    // BOSS 专属食材即使不在 monster_drops 表里，也按普通素材 5 金币/份回收；稀有素材 20 金币/份。
+    const price=drops?.some(x=>x.is_rare)?20:5,total=price*qty;
+    const {data:changed,error:updateError}=await db.from('inventory').update({item_count:count-qty}).eq('id',id).eq('player_id',currentUser.id).eq('item_count',count).select('id,item_count').maybeSingle();
+    if(updateError||!changed){alert('扣除素材失败：'+(updateError?.message||'背包记录没有更新，可能是权限策略限制或数量已变化'));return;}
+    const {data:latest,error:readCoinsError}=await db.from('adventurers').select('coins').eq('user_id',currentUser.id).maybeSingle();
+    if(readCoinsError||!latest){
+      const rollback=await db.from('inventory').update({item_count:count}).eq('id',id).eq('player_id',currentUser.id).select('id').maybeSingle();
+      alert('读取当前金币失败：'+(readCoinsError?.message||'未找到玩家档案')+(rollback.error?'；并且恢复背包数量失败，请联系管理员核对。': '；已尝试恢复素材数量。'));return;
+    }
+    const coins=(Number(latest.coins)||0)+total;
+    const {data:updated,error:coinError}=await db.from('adventurers').update({coins}).eq('user_id',currentUser.id).select().maybeSingle();
+    if(coinError||!updated){
+      const rollback=await db.from('inventory').update({item_count:count}).eq('id',id).eq('player_id',currentUser.id).select('id').maybeSingle();
+      alert('金币入账失败：'+(coinError?.message||'玩家资料没有更新')+(rollback.error||!rollback.data?'；恢复素材数量也未能确认，请联系管理员核对背包。':'；已尝试恢复素材数量。'));return;
+    }
+    currentAdventurer=updated;alert(`出售成功：${item.item_name} ×${qty}，获得 ${total} 金币。`);await loadInventory();await loadEquipment();await loadShop();await loadPanel();
+  }finally{window[lockKey]=false;}
 }
 async function getInventoryRows(){const {data,error}=await db.from('inventory').select('*').eq('player_id',currentUser.id).order('id',{ascending:true});if(error)throw error;return (data||[]).filter(x=>getItemCount(x)>0);}
 async function getEquippedBonuses(){
@@ -2326,8 +2339,9 @@ async function loadWorldBoss(adminRefresh=false){
   actions.innerHTML=ended?'<button class="primary" onclick="claimWorldBossReward()">🎁 抽取 / 领取我的参与奖励</button>':'<button class="primary" onclick="attackWorldBoss()">⚔️ 参加讨伐（每日一次）</button>';
   const {data:logs}=await db.from('world_boss_logs').select('created_at,player_name,damage,roll_value,message').eq('event_id',data.id).order('created_at',{ascending:false}).limit(20);
   log.innerHTML=(logs||[]).length?(logs||[]).map(x=>'<div class="inventoryItem"><b>'+escapeHtml(x.player_name||'冒险者')+'</b>｜伤害 '+Number(x.damage||0)+'<div class="small muted">'+escapeHtml(x.message||('D100='+x.roll_value))+'｜'+escapeHtml(x.created_at||'')+'</div></div>').join(''):'<p class="muted">暂无讨伐记录。</p>';
-  const {data:mine}=await db.from('world_boss_attempts').select('damage_total,reward_claimed').eq('event_id',data.id).eq('user_id',currentUser.id).limit(1).maybeSingle();
-  if(mine){reward.innerHTML='<div class="huntResult">你本次贡献伤害：'+Number(mine.damage_total||0)+'。'+(mine.reward_claimed?'奖励已领取。':ended?'活动结束后可领取奖励。':'你已参加本次讨伐，等待活动结束后领取奖励。')+'</div>';actions.innerHTML=(ended&&!mine.reward_claimed)?'<button class="primary" onclick="claimWorldBossReward()">🎁 抽取 / 领取我的参与奖励</button>':'';}
+  const {data:mine,error:mineError}=await db.from('world_boss_participants').select('damage,reward_claimed').eq('event_id',data.id).eq('player_id',currentUser.id).maybeSingle();
+  if(mineError){reward.innerHTML='<p class="err">读取个人参与记录失败：'+escapeHtml(mineError.message)+'</p>';actions.innerHTML='';}
+  else if(mine){reward.innerHTML='<div class="huntResult">你本次累计贡献伤害：'+Number(mine.damage||0)+'。'+(mine.reward_claimed?'奖励已领取。':ended?'活动结束后可领取奖励。':'你已参加本次讨伐，等待活动结束后领取奖励。')+'</div>';actions.innerHTML=(ended&&!mine.reward_claimed)?'<button class="primary" onclick="claimWorldBossReward()">🎁 抽取 / 领取我的参与奖励</button>':'';}
   else{reward.innerHTML='<p class="muted">你尚未参与本次讨伐。只有造成过伤害的玩家可领取本次奖励。</p>';if(ended)actions.innerHTML='';}
   if(adminRefresh&&isAdmin()){const msg=document.getElementById('bossAdminMsg');if(msg)msg.textContent='已刷新最新活动状态。';}
 }
