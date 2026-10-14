@@ -121,6 +121,17 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
       </div>
     </div>
 
+    <!-- 全服 BOSS -->
+    <div id="bossSection" class="section">
+      <div class="card"><h2>🐉 全服 BOSS 讨伐</h2>
+        <p class="muted">全服共用一条血量。每位冒险者每天可挑战一次；造成伤害后即可在活动结束时领取一次个人奖励。BOSS 归零或管理员提前结束后停止挑战。</p>
+        <div id="worldBossStatus" class="huntResult">正在读取全服 BOSS 状态……</div>
+        <div id="worldBossActions" class="row" style="margin-top:12px"></div>
+        <div id="worldBossLog" class="battleLog" style="margin-top:12px"></div>
+        <div id="worldBossReward" style="margin-top:12px"></div>
+      </div>
+    </div>
+
     <!-- 美食 Buff -->
     <div id="buffSection" class="section">
       <div class="card"><h2>🍲 美食 Buff</h2><p class="muted">随机抽取料理 Buff，或为自己的魔物料理设计专属 Buff。</p><button class="primary" onclick="drawFoodBuff()">🎲 随机抽取 Buff</button><div id="drawBuffResult" class="huntResult">还没有抽取 Buff。</div></div>
@@ -218,6 +229,7 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
           <button id="adminTabPlayers" class="adminTab" onclick="showAdminPane('players')">👥 玩家管理</button>
           <button id="adminTabSelf" class="adminTab" onclick="showAdminPane('self')">👑 我的 管理员 数据</button>
           <button id="adminTabMaps" class="adminTab" onclick="showAdminPane('maps')">🗺️ 地图管理</button>
+          <button id="adminTabBoss" class="adminTab" onclick="showAdminPane('boss')">🐉 全服 BOSS</button>
         </div>
       </div>
 
@@ -262,6 +274,11 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
             <button class="secondary" onclick="grantInfiniteAP()">⚡ 9999 AP</button>
           </div>
           <p id="adminPlayerMsg" class="muted"></p>
+          <hr><h3>🎒 管理员发放背包物品</h3>
+          <p class="muted">给上方选中的玩家直接添加物品，不扣金币。数量必须为正整数。</p>
+          <div class="grid"><div><label>物品名称</label><input id="adminGrantItemName" placeholder="例如：莱姆凝胶"></div><div><label>发放数量</label><input id="adminGrantItemCount" type="number" min="1" step="1" value="1"></div></div>
+          <label>物品说明（可选）</label><input id="adminGrantItemDesc" placeholder="活动奖励、任务奖励等">
+          <button class="primary" style="margin-top:10px" onclick="adminGrantInventoryItem()">🎁 发放给选中玩家</button><p id="adminGrantItemMsg" class="muted"></p>
         </div>
       </div>
 
@@ -297,6 +314,15 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
         </div>
       </div>
 
+      <div id="adminPaneBoss" class="adminPane">
+        <div class="card"><h3>🐉 全服 BOSS 管理</h3>
+          <p class="muted">管理员可以开启新活动、提前结束并手动结算。每次活动只有一个共享血条；已造成伤害的玩家均有资格领取一次奖励。</p>
+          <div class="grid"><div><label>BOSS 名称</label><input id="bossAdminName" value="深渊食灾龙"></div><div><label>BOSS 等级</label><input id="bossAdminLevel" type="number" min="1" value="1"></div><div><label>全服总 HP</label><input id="bossAdminHp" type="number" min="1" value="100000"></div></div>
+          <div class="row" style="margin-top:10px"><button class="primary" onclick="adminStartWorldBoss()">🚩 开启新 BOSS 活动</button><button class="danger" onclick="adminEndWorldBoss()">⏹ 提前结束并结算</button><button class="secondary" onclick="loadWorldBoss(true)">🔄 刷新状态</button></div>
+          <p id="bossAdminMsg" class="muted"></p>
+        </div>
+      </div>
+
       <div id="adminPaneMaps" class="adminPane">
         <div class="card">
           <h3>🗺️ 玩家地图权限</h3>
@@ -324,6 +350,7 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
   <button id="navBestiary" class="navbtn" onclick="showSection('bestiary')">📖 怪物图鉴</button>
   <button id="navHunt" class="navbtn" onclick="showSection('hunt')">⚔️ 地图 / 狩猎</button>
   <button id="navTown" class="navbtn" onclick="showSection('town')">🏘️ 美食镇</button>
+  <button id="navBoss" class="navbtn" onclick="showSection('boss')">🐉 全服 BOSS</button>
   <button id="navBuff" class="navbtn" onclick="showSection('buff')">🍲 美食 Buff</button>
   <button id="navRecipe" class="navbtn" onclick="showSection('recipe')">🍳 提交料理</button>
 
@@ -597,7 +624,7 @@ function closeSide(){
 }
 
 function showSection(name){
-  ["main","panel","inventory","equipment","bestiary","hunt","town","buff","recipe","admin"].forEach(x=>{
+  ["main","panel","inventory","equipment","bestiary","hunt","town","boss","buff","recipe","admin"].forEach(x=>{
     const sec=document.getElementById(x+"Section");
     if(sec)sec.classList.toggle("active",x===name);
     const nav=document.getElementById("nav"+x.charAt(0).toUpperCase()+x.slice(1));
@@ -611,6 +638,7 @@ function showSection(name){
   if(name==="hunt"){loadHuntData(); startTeamRefresh();}else{stopTeamRefresh();}
   if(name==="recipe"){loadRecipeList();loadRecipeMapOptions();}
   if(name==="town"){townOpen('shop');renderRestStatus();}
+  if(name==="boss")loadWorldBoss(false);
   if(name==="buff"){renderCustomBuffs();}
   if(name==="admin")loadAdminDashboard();
 }
@@ -1866,7 +1894,7 @@ setInterval(async()=>{
    ============================================================= */
 function showAdminPane(name){
   if(!isAdmin())return;
-  ["recipes","players","self","maps"].forEach(x=>{
+  ["recipes","players","self","maps","boss"].forEach(x=>{
     const pane=document.getElementById("adminPane"+x.charAt(0).toUpperCase()+x.slice(1));
     const tab=document.getElementById("adminTab"+x.charAt(0).toUpperCase()+x.slice(1));
     if(pane)pane.classList.toggle("active",x===name);
@@ -1876,6 +1904,7 @@ function showAdminPane(name){
   if(name==="players")loadAdminPlayers();
   if(name==="self")loadAdminSelfData();
   if(name==="maps")loadAdminPlayerMaps(true);
+  if(name==="boss")loadWorldBoss(true);
 }
 
 async function loadAdminDashboard(){
@@ -2174,7 +2203,7 @@ async function loadShop(kind='mystery'){
     const gear=EQUIPMENT_CATALOG.filter(x=>unlocked.has(x.map)).map(x=>`<div class="inventoryItem"><b>${x.slot==='weapon'?'🗡️':'🛡️'} ${escapeHtml(x.name)}</b><span class="badge">${x.price} 金币</span><p class="muted">地图：${escapeHtml(x.map)}｜${x.slot==='weapon'?'攻击':'防御'}加成 +${x.slot==='weapon'?x.attack:x.defense}</p><p>${escapeHtml(x.desc)}</p><button class="primary" onclick="buyShopItem('${escapeJs(x.name)}')">购买</button></div>`).join('');
     box.innerHTML=`<div class="stat">💰 当前金币：${Number(currentAdventurer.coins)||0}</div><h4>⚔️ 莉莉娅会长的装备货架</h4><p class="small muted">只显示已解锁地图对应的装备。购买后进入背包，在装备栏穿戴才会生效。</p>${gear||'<p class="muted">暂无可购买的地图装备。</p>'}`;return;
   }
-  const packs=ATTRIBUTE_PACKS.map(x=>`<div class="inventoryItem"><b>✨ ${escapeHtml(x.name)}</b><span class="badge">固定提升：${escapeHtml(x.stat)} +${x.amount}</span><p>${escapeHtml(x.desc)}</p><p class="muted">支付方式任选其一：${x.price} 金币，或 1 份特殊材料（标记为稀有的魔物掉落物）。</p><button class="primary" onclick="buyAttributePack('${x.key}','coins')">用 ${x.price} 金币购买</button> <button class="secondary" onclick="buyAttributePack('${x.key}','material')">用 1 份特殊材料购买</button></div>`).join('');
+  const packs=ATTRIBUTE_PACKS.map(x=>`<div class="inventoryItem"><b>✨ ${escapeHtml(x.name)}</b><span class="badge">固定提升：${escapeHtml(x.stat)} +${x.amount}</span><p>${escapeHtml(x.desc)}</p><p class="muted">支付方式任选其一：${x.price} 金币，或 1 份特殊材料（标记为稀有的魔物掉落物）。</p><button class="primary" onclick="buyAttributePack('${x.key}','coins')">用 ${x.price} 金币购买</button></div>`).join('');
   const mats=(inv||[]).filter(x=>getItemCount(x)>0&&rareNames.has(x.item_name)&&!gearNames.has(x.item_name)&&!SHOP_POTIONS.some(p=>p.name===x.item_name));
   const sellingPool=(inv||[]).filter(x=>getItemCount(x)>0&&!gearNames.has(x.item_name)&&!SHOP_POTIONS.some(p=>p.name===x.item_name)&&!ATTRIBUTE_PACKS.some(a=>a.name===x.item_name));
   const selling=sellingPool.length?sellingPool.map(x=>{const price=rareNames.has(x.item_name)?20:5;return `<div class="inventoryItem"><span class="badge">×${getItemCount(x)}</span><b>🧺 ${escapeHtml(x.item_name)}</b><p class="muted">${rareNames.has(x.item_name)?'特殊/稀有素材':'普通素材'}｜每份回收 ${price} 金币</p><button class="secondary" onclick="sellMaterial('${escapeJs(x.id)}',1)">出售 1 份</button> <button class="secondary" onclick="sellMaterial('${escapeJs(x.id)}',${getItemCount(x)})">全部出售</button></div>`;}).join(''):'<p class="muted">背包里暂时没有可出售的素材。</p>';
@@ -2289,6 +2318,65 @@ function getCustomBuffs(){try{return JSON.parse(localStorage.getItem(buffKey())|
 function saveCustomBuff(){if(isResting()){alert('你正在客栈休息，AP 回满并结束休息后才能进行其他行为。');return;}const dish=document.getElementById('customBuffDish').value.trim(),name=document.getElementById('customBuffName').value.trim(),desc=document.getElementById('customBuffDesc').value.trim(),msg=document.getElementById('customBuffMsg');if(!dish||!name||!desc){msg.textContent='请把料理名称、Buff 名称和效果填写完整。';return;}const list=getCustomBuffs();list.unshift({dish,name,desc,created_at:new Date().toISOString()});localStorage.setItem(buffKey(),JSON.stringify(list));document.getElementById('customBuffDish').value='';document.getElementById('customBuffName').value='';document.getElementById('customBuffDesc').value='';msg.textContent='保存成功！';renderCustomBuffs();}
 function renderCustomBuffs(){const box=document.getElementById('myBuffList');if(!box)return;const list=getCustomBuffs();box.innerHTML=list.length?list.map((b,i)=>'<div class="inventoryItem"><b>🍳 '+escapeHtml(b.dish)+'</b><br><strong>'+escapeHtml(b.name)+'</strong><br><span class="muted">'+escapeHtml(b.desc)+'</span><br><button class="danger" onclick="deleteCustomBuff('+i+')">删除</button></div>').join(''):'<p class="muted">暂无自定义 Buff。</p>';}
 function deleteCustomBuff(i){const list=getCustomBuffs();list.splice(i,1);localStorage.setItem(buffKey(),JSON.stringify(list));renderCustomBuffs();}
+
+
+// ================= 全服 BOSS 与管理员背包发放 =================
+let currentWorldBoss=null;
+async function loadWorldBoss(adminRefresh=false){
+  const status=document.getElementById('worldBossStatus');if(!status)return;
+  status.textContent='正在读取全服 BOSS 状态……';
+  const {data,error}=await db.from('world_boss_events').select('*').order('created_at',{ascending:false}).limit(1).maybeSingle();
+  if(error){status.innerHTML='暂时无法读取 BOSS：'+escapeHtml(error.message)+'。请先在 Supabase 执行随附 SQL。';return;}
+  currentWorldBoss=data||null;
+  const actions=document.getElementById('worldBossActions'),log=document.getElementById('worldBossLog'),reward=document.getElementById('worldBossReward');
+  if(!data){status.textContent='目前没有全服 BOSS 活动。';actions.innerHTML='';log.innerHTML='';reward.innerHTML='';return;}
+  const hp=Math.max(0,Number(data.current_hp)||0),max=Math.max(1,Number(data.max_hp)||1),ended=data.status!=='active';
+  status.innerHTML='<b>🐉 '+escapeHtml(data.boss_name||'全服 BOSS')+'（Lv.'+(Number(data.boss_level)||1)+'）</b><p>'+ (ended?'活动已结束，可以领取参与奖励。':'活动进行中，快来贡献伤害！') +'</p><div class="stat">全服 HP：'+hp.toLocaleString()+' / '+max.toLocaleString()+'</div><div style="height:14px;background:#e5e0d6;border-radius:9px;overflow:hidden"><div style="height:100%;width:'+Math.max(0,Math.min(100,hp/max*100))+'%;background:#b3261e"></div></div><p class="small muted">开始时间：'+escapeHtml(data.started_at||data.created_at||'')+'｜状态：'+escapeHtml(data.status)+'</p>';
+  actions.innerHTML=ended?'<button class="primary" onclick="claimWorldBossReward()">🎁 抽取 / 领取我的参与奖励</button>':'<button class="primary" onclick="attackWorldBoss()">⚔️ 参加讨伐（每日一次）</button>';
+  const {data:logs}=await db.from('world_boss_logs').select('created_at,player_name,damage,roll_value,message').eq('event_id',data.id).order('created_at',{ascending:false}).limit(20);
+  log.innerHTML=(logs||[]).length?(logs||[]).map(x=>'<div class="inventoryItem"><b>'+escapeHtml(x.player_name||'冒险者')+'</b>｜伤害 '+Number(x.damage||0)+'<div class="small muted">'+escapeHtml(x.message||('D100='+x.roll_value))+'｜'+escapeHtml(x.created_at||'')+'</div></div>').join(''):'<p class="muted">暂无讨伐记录。</p>';
+  const {data:mine}=await db.from('world_boss_attempts').select('damage_total,reward_claimed').eq('event_id',data.id).eq('user_id',currentUser.id).limit(1).maybeSingle();
+  if(mine){reward.innerHTML='<div class="huntResult">你本次贡献伤害：'+Number(mine.damage_total||0)+'。'+(mine.reward_claimed?'奖励已领取。':ended?'活动结束后可领取奖励。':'你已参加本次讨伐，等待活动结束后领取奖励。')+'</div>';actions.innerHTML=(ended&&!mine.reward_claimed)?'<button class="primary" onclick="claimWorldBossReward()">🎁 抽取 / 领取我的参与奖励</button>':'';}
+  else{reward.innerHTML='<p class="muted">你尚未参与本次讨伐。只有造成过伤害的玩家可领取本次奖励。</p>';if(ended)actions.innerHTML='';}
+  if(adminRefresh&&isAdmin()){const msg=document.getElementById('bossAdminMsg');if(msg)msg.textContent='已刷新最新活动状态。';}
+}
+async function attackWorldBoss(){
+  if(isResting()){alert('你正在客栈休息，结束休息后才能参加讨伐。');return;}
+  if(!currentUser||!currentWorldBoss){alert('当前没有可挑战的 BOSS。');return;}
+  const {data,error}=await db.rpc('world_boss_attack',{p_event_id:currentWorldBoss.id});
+  if(error){alert('讨伐失败：'+error.message+'。请确认已执行随附 SQL。');return;}
+  alert(data?.message||'讨伐结算完成！');await loadWorldBoss(false);
+}
+async function claimWorldBossReward(){
+  if(!currentUser||!currentWorldBoss)return;
+  const {data,error}=await db.rpc('world_boss_claim_reward',{p_event_id:currentWorldBoss.id});
+  if(error){alert('领取失败：'+error.message+'。');return;}
+  alert(data?.message||'奖励领取完成！');await loadWorldBoss(false);await loadInventory();
+}
+async function adminStartWorldBoss(){
+  if(!isAdmin())return alert('仅管理员可以操作。');
+  const name=document.getElementById('bossAdminName').value.trim(),level=Number(document.getElementById('bossAdminLevel').value),hp=Number(document.getElementById('bossAdminHp').value),msg=document.getElementById('bossAdminMsg');
+  if(!name||!Number.isInteger(level)||level<1||!Number.isInteger(hp)||hp<1){msg.textContent='请填写有效的名称、等级和总 HP。';return;}
+  const {data,error}=await db.rpc('world_boss_admin_start',{p_boss_name:name,p_boss_level:level,p_max_hp:hp});
+  if(error){msg.textContent='开启失败：'+error.message+'。请先执行随附 SQL。';msg.className='err';return;}
+  msg.textContent='已开启全服 BOSS 活动。';msg.className='ok';await loadWorldBoss(true);
+}
+async function adminEndWorldBoss(){
+  if(!isAdmin())return alert('仅管理员可以操作。');
+  if(!currentWorldBoss){await loadWorldBoss(true);if(!currentWorldBoss)return alert('当前没有活动。');}
+  if(!confirm('确定提前结束当前 BOSS 并开放参与玩家领奖？'))return;
+  const {data,error}=await db.rpc('world_boss_admin_end',{p_event_id:currentWorldBoss.id});
+  const msg=document.getElementById('bossAdminMsg');if(error){msg.textContent='结束失败：'+error.message;msg.className='err';return;}
+  msg.textContent='活动已结束，所有已参与玩家可各领取一次奖励。';msg.className='ok';await loadWorldBoss(true);
+}
+async function adminGrantInventoryItem(){
+  if(!isAdmin())return;
+  const uid=document.getElementById('adminPlayerSelect')?.value,name=document.getElementById('adminGrantItemName').value.trim(),count=Number(document.getElementById('adminGrantItemCount').value),desc=document.getElementById('adminGrantItemDesc').value.trim(),msg=document.getElementById('adminGrantItemMsg');
+  if(!uid||!name||!Number.isInteger(count)||count<1){msg.textContent='请选择玩家，填写物品名称和正整数数量。';msg.className='err';return;}
+  const {data,error}=await db.rpc('admin_grant_inventory_item',{p_player_id:uid,p_item_name:name,p_item_count:count,p_item_desc:desc});
+  if(error){msg.textContent='发放失败：'+error.message+'。请先执行随附 SQL。';msg.className='err';return;}
+  msg.textContent='已向所选玩家发放 '+name+' ×'+count+'。';msg.className='ok';
+}
 
 function escapeHtml(v){
   return String(v??"").replace(/[&<>"']/g,c=>({
