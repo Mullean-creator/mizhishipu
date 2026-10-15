@@ -181,7 +181,11 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
         <h2>🍳 创意料理提交</h2>
         <p class="muted">游戏外完成原创料理/食谱后，在这里提交登记。请同时把成品和食谱发布到企划指定的 QQ 群相册，管理员审核后会为你与其他玩家解锁新地图！</p>
         <input id="recipeName" placeholder="料理名称"><br><br>
-        <textarea id="recipeDesc" placeholder="简单描述 / 使用了哪些魔物食材" rows="3"></textarea><br><br>
+        <textarea id="recipeDesc" placeholder="料理做法、创意说明等（食材请在下方背包清单中勾选并填写数量）" rows="3"></textarea><br><br>
+        <label><b>🥕 本次料理使用的食材</b></label>
+        <p class="small muted">请选择背包里实际用到的食材并填写数量。点击提交后，这些食材会一并送交管理员审核，并立即从背包扣除；即使料理最终未通过，也不会退还。</p>
+        <div id="recipeIngredientList" class="huntResult" style="margin:8px 0"><p class="muted">正在读取背包食材……</p></div>
+        <button type="button" class="secondary" onclick="loadRecipeIngredientOptions()">🔄 刷新背包食材</button><br><br>
         <label><b>🗺️ 希望解锁的地图</b></label>
         <select id="recipeMapRequest">
           <option value="">正在读取可申请地图……</option>
@@ -390,12 +394,12 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
 
     <h3>⚔️ 六项基础属性</h3>
     <div class="attrGrid">
-      <input id="a_technique" type="number" min="0" value="0" placeholder="技巧">
-      <input id="a_endurance" type="number" min="0" value="0" placeholder="耐力">
-      <input id="a_taste" type="number" min="0" value="0" placeholder="味觉">
-      <input id="a_proficiency" type="number" min="0" value="0" placeholder="熟练度">
-      <input id="a_smell" type="number" min="0" value="0" placeholder="嗅觉">
-      <input id="a_magic" type="number" min="0" value="0" placeholder="魔力感知">
+      <input id="a_technique" type="number" min="0" placeholder="技巧">
+      <input id="a_endurance" type="number" min="0" placeholder="耐力">
+      <input id="a_taste" type="number" min="0" placeholder="味觉">
+      <input id="a_proficiency" type="number" min="0" placeholder="熟练度">
+      <input id="a_smell" type="number" min="0" placeholder="嗅觉">
+      <input id="a_magic" type="number" min="0" placeholder="魔力感知">
     </div>
 
     <p id="sumText" class="muted">当前属性总和：0 / 50</p>
@@ -648,7 +652,7 @@ function showSection(name){
   if(name==="equipment")loadEquipment();
   if(name==="bestiary")loadBestiary();
   if(name==="hunt"){loadHuntData(); startTeamRefresh();}else{stopTeamRefresh();}
-  if(name==="recipe"){loadRecipeList();loadRecipeMapOptions();}
+  if(name==="recipe"){loadRecipeList();loadRecipeMapOptions();loadRecipeIngredientOptions();}
   if(name==="town"){townOpen('shop');renderRestStatus();}
   if(name==="boss")loadWorldBoss(false);
   if(name==="buff"){renderCustomBuffs();}
@@ -861,8 +865,36 @@ async function loadBestiary(){
 /* =========================
    🍳 料理提交与查看
    ========================= */
+function isRecipeIngredientItem(item){
+  if(!item||getItemCount(item)<=0)return false;
+  if(parseEquipmentMeta(item))return false;
+  const name=String(item.item_name||'');
+  const desc=String(item.item_desc||'');
+  if(/^MZ_POTION\|/i.test(desc)||SHOP_POTIONS.some(p=>p.name===name)||/(血药|回复药|治疗药|生命药|恢复药)/.test(name))return false;
+  if(ATTRIBUTE_PACKS.some(p=>p.name===name))return false;
+  return true;
+}
+
+async function loadRecipeIngredientOptions(){
+  const box=document.getElementById('recipeIngredientList');
+  if(!box||!currentUser)return;
+  box.innerHTML='<p class="muted">正在读取背包食材……</p>';
+  const {data,error}=await db.from('inventory').select('id,item_name,item_desc,item_count').eq('player_id',currentUser.id).order('id',{ascending:true});
+  if(error){box.innerHTML='<p class="err">暂时无法读取背包食材，请稍后重试。</p>';return;}
+  const items=(data||[]).filter(isRecipeIngredientItem);
+  if(!items.length){box.innerHTML='<p class="muted">背包里暂时没有可提交的食材。请先去狩猎收集魔物食材。</p>';return;}
+  box.innerHTML=items.map(item=>{
+    const count=getItemCount(item);
+    return `<div class="row" style="justify-content:space-between;align-items:center;gap:10px;margin:8px 0;padding:8px;border-bottom:1px solid #ddd">
+      <div style="flex:1;min-width:0"><b>${escapeHtml(item.item_name||'未命名食材')}</b><div class="small muted">背包数量：${count}${item.item_desc&&!String(item.item_desc).startsWith('MZ_')?`｜${escapeHtml(item.item_desc)}`:''}</div></div>
+      <div style="width:110px"><label class="small">提交数量</label><input class="recipeIngredientQty" data-item-id="${escapeHtml(item.id)}" data-item-name="${escapeHtml(item.item_name||'未命名食材')}" data-max="${count}" type="number" min="0" max="${count}" step="1" value="0" style="width:100%"></div>
+    </div>`;
+  }).join('');
+}
+
 async function submitRecipe(){
   if(isResting()){alert("你正在客栈休息，AP 回满并结束休息后才能提交料理。");return;}
+  if(!currentUser){alert('请先登录后再提交料理。');return;}
   const name = document.getElementById("recipeName").value.trim();
   const desc = document.getElementById("recipeDesc").value.trim();
   const requestedMap = document.getElementById("recipeMapRequest")?.value || "";
@@ -874,29 +906,79 @@ async function submitRecipe(){
     return;
   }
 
-  msgEl.textContent = "提交中……";
-  const { error } = await db.from("recipe_submissions").insert({
+  const selected=[];
+  for(const input of document.querySelectorAll('.recipeIngredientQty')){
+    const qty=Number(input.value||0);
+    const max=Number(input.dataset.max||0);
+    if(!Number.isInteger(qty)||qty<0||qty>max){
+      msgEl.textContent=`「${input.dataset.itemName||'食材'}」的提交数量不正确，请检查后重试。`;
+      msgEl.className='err';return;
+    }
+    if(qty>0)selected.push({id:input.dataset.itemId,name:input.dataset.itemName,qty,oldCount:max});
+  }
+  if(!selected.length){
+    msgEl.textContent='请至少选择一种本次料理实际使用的食材，并填写提交数量。';
+    msgEl.className='err';return;
+  }
+
+  msgEl.textContent = "正在提交料理并核对食材……";
+  msgEl.className = "muted";
+
+  // 提交前重新读取库存，避免使用打开页面后已经过期的数量。
+  const {data:latest,error:readError}=await db.from('inventory').select('id,item_name,item_desc,item_count').eq('player_id',currentUser.id).in('id',selected.map(x=>x.id));
+  if(readError||!latest||latest.length!==selected.length){
+    msgEl.textContent='无法核对当前背包，请刷新食材清单后再提交。';msgEl.className='err';return;
+  }
+  for(const chosen of selected){
+    const live=latest.find(x=>String(x.id)===String(chosen.id));
+    if(!live||!isRecipeIngredientItem(live)||getItemCount(live)<chosen.qty){
+      msgEl.textContent=`「${chosen.name}」的背包数量不足或已发生变化，请刷新食材清单后重试。`;
+      msgEl.className='err';return;
+    }
+    chosen.oldCount=getItemCount(live);
+    chosen.name=live.item_name||chosen.name;
+  }
+
+  const ingredientLines=selected.map(x=>`- ${x.name} × ${x.qty}`).join('\n');
+  const fullDesc=`${desc}\n\n【本次提交并消耗的食材】\n${ingredientLines}`;
+  const changed=[];
+  for(const chosen of selected){
+    const {error:updateError}=await db.from('inventory').update({item_count:chosen.oldCount-chosen.qty}).eq('id',chosen.id).eq('player_id',currentUser.id);
+    if(updateError){
+      for(const done of changed){await db.from('inventory').update({item_count:done.oldCount}).eq('id',done.id).eq('player_id',currentUser.id);}
+      msgEl.textContent='食材扣除未能完成，没有提交料理，请刷新背包后重试。';msgEl.className='err';return;
+    }
+    changed.push(chosen);
+  }
+
+  const {error:insertError}=await db.from("recipe_submissions").insert({
     user_id: currentUser.id,
     author_name: currentAdventurer?.name || currentUser.user_metadata?.nickname || "未知厨师",
     recipe_name: name,
-    recipe_desc: desc,
+    recipe_desc: fullDesc,
     requested_map_name: requestedMap,
     status: "pending"
   });
 
-  if(error){
-    msgEl.textContent = "提交失败，请检查内容后重试。";
-    msgEl.className = "err";
-  }else{
-    msgEl.textContent = "🎉 提交成功！请等待管理员审核。审核通过后将为你和全服解锁新地图！";
-    msgEl.className = "ok";
-    document.getElementById("recipeName").value = "";
-    document.getElementById("recipeDesc").value = "";
-    if(document.getElementById("recipeMapRequest"))document.getElementById("recipeMapRequest").selectedIndex=0;
-    loadRecipeList();
+  if(insertError){
+    let restored=true;
+    for(const done of changed){
+      const {error:restoreError}=await db.from('inventory').update({item_count:done.oldCount}).eq('id',done.id).eq('player_id',currentUser.id);
+      if(restoreError)restored=false;
+    }
+    msgEl.textContent=restored?'料理提交失败，食材已退回背包，请检查内容后重试。':'料理提交失败，部分食材可能未能自动退回，请联系管理员核对背包。';
+    msgEl.className='err';return;
   }
-}
 
+  msgEl.textContent = `🎉 料理提交成功！已将 ${selected.map(x=>`${x.name} × ${x.qty}`).join('、')} 一并送交审核，并从背包扣除。请等待管理员审核。`;
+  msgEl.className = "ok";
+  document.getElementById("recipeName").value = "";
+  document.getElementById("recipeDesc").value = "";
+  if(document.getElementById("recipeMapRequest"))document.getElementById("recipeMapRequest").selectedIndex=0;
+  await loadRecipeIngredientOptions();
+  await loadInventory();
+  await loadRecipeList();
+}
 async function loadRecipeList(){
   const box = document.getElementById("recipeList");
   const { data, error } = await db.from("recipe_submissions").select("*").eq("user_id", currentUser.id).order("created_at", {ascending:false});
@@ -908,7 +990,7 @@ async function loadRecipeList(){
     <div class="recipeItem">
       <span class="badge ${r.status==='approved'?'ok':r.status==='rejected'?'err':''}">${r.status==='approved'?'✅ 已审核通过':r.status==='rejected'?'❌ 未通过':'⏳ 待审核'}</span>
       <b>🍳 ${escapeHtml(r.recipe_name)}</b>
-      <p class="small muted">${escapeHtml(r.description ?? r.recipe_desc ?? "")}</p>
+      <p class="small muted" style="white-space:pre-line">${escapeHtml(r.description ?? r.recipe_desc ?? "")}</p>
       ${r.unlocked_map_name ? `<p class="small ok">🗺️ 已解锁地图：${escapeHtml(r.unlocked_map_name)}</p>` : ''}
     </div>
   `).join("");
@@ -1463,24 +1545,31 @@ async function useBattlePotion(){
     .select("id,item_name,item_desc,item_count")
     .eq("player_id",currentUser.id)
     .order("id",{ascending:true});
-  if(error){addBattleLog("❌ 无法读取背包，暂时不能使用血药。",true);return false;}
-  const item=(data||[]).find(x=>getItemCount(x)>0&&/(血药|回复药|治疗药|生命药|恢复药)/.test(x.item_name||""));
-  if(!item){addBattleLog("🧪 背包里没有可用的血药。");return false;}
-  // 满血时不扣除道具，也不消耗本次行动。
+  if(error){console.error("读取血药失败：",error);addBattleLog("❌ 背包读取失败，请稍后再试。",true);return false;}
+  // 同时识别教堂出售的正式药剂名称、旧版本血药名称，以及带有药剂标记的背包道具。
+  const item=(data||[]).find(x=>getItemCount(x)>0&&(
+    SHOP_POTIONS.some(p=>p.name===String(x.item_name||"")) ||
+    /^MZ_POTION\|\d+/.test(String(x.item_desc||"")) ||
+    /(血药|回复药|治疗药|生命药|恢复药)/.test(String(x.item_name||""))
+  ));
+  if(!item){addBattleLog("🧪 背包里没有可用的恢复药剂，可以先去教堂购买。",true);return false;}
   if(battle.playerHp>=battle.player.maxHp){
-    addBattleLog("🧪 当前 HP 已满，不需要使用血药；道具未消耗，本次行动不结束。",true);
+    addBattleLog("🧪 当前 HP 已满，不需要使用恢复药剂，道具未消耗。",true);
     return false;
   }
   const oldCount=getItemCount(item);
-  const newCount=Math.max(0,oldCount-1);
+  if(oldCount<1){addBattleLog("🧪 这份药剂已经用完了。",true);return false;}
+  const newCount=oldCount-1;
   const {error:updateError}=await db.from("inventory").update({item_count:newCount}).eq("id",item.id).eq("player_id",currentUser.id);
-  if(updateError){addBattleLog("❌ 血药使用失败，请稍后重试。",true);return false;}
+  if(updateError){console.error("扣除恢复药剂失败：",updateError);addBattleLog("❌ 恢复药剂使用失败，道具没有扣除，请稍后重试。",true);return false;}
   const potion=SHOP_POTIONS.find(x=>x.name===item.item_name);
   const marker=String(item.item_desc||'').match(/^MZ_POTION\|(\d+)/);
-  const healAmount=potion?.heal||Number(marker?.[1])||30;
-  const heal=Math.min(healAmount,battle.player.maxHp-battle.playerHp);
-  battle.playerHp=Math.min(battle.player.maxHp,battle.playerHp+healAmount);
-  addBattleLog(`🧪 你使用「${item.item_name}」，恢复 ${heal} HP。`);
+  const healAmount=Math.max(1,Number(potion?.heal||marker?.[1]||30));
+  const beforeHp=battle.playerHp;
+  battle.playerHp=Math.min(battle.player.maxHp,beforeHp+healAmount);
+  const healed=battle.playerHp-beforeHp;
+  addBattleLog(`🧪 你使用「${item.item_name}」，恢复 ${healed} HP。剩余 ${newCount} 瓶。`);
+  updateBattleUI();
   return true;
 }
 
@@ -1813,7 +1902,7 @@ async function signin(){
   const {data,error}=await db.rpc("daily_signin");
   if(error){e.textContent="暂时无法完成操作，请稍后重试。";e.className="err";return}
   if(data===-1){e.textContent="今天已经签到过啦，明天再来领取奖励吧！";return}
-  e.textContent="签到成功！当前金币："+data;e.className="ok";
+  e.textContent="签到成功！+30金币！当前金币总数："+data;e.className="ok";
   await loadAdventurer();
 }
 
@@ -2046,7 +2135,7 @@ async function loadAdminRecipes(){
       </div>
       <div class="adminStat">提交者：${escapeHtml(r.author_name||"未知玩家")}</div>
       <div class="adminStat">申请解锁：<b>${escapeHtml(requested)}</b></div>
-      <p>${escapeHtml(r.recipe_desc||r.description||"暂无描述")}</p>
+      <p style="white-space:pre-line">${escapeHtml(r.recipe_desc||r.description||"暂无描述")}</p>
       ${pending?`<div class="row">
         <button class="primary" onclick="approveRecipe('${escapeJs(r.id)}')">✅ 审核通过并解锁该玩家地图</button>
         <button class="danger" onclick="rejectRecipe('${escapeJs(r.id)}')">❌ 驳回</button>
