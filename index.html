@@ -71,8 +71,8 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
     <input id="username" placeholder="账号名（注册时填写）"><br><br>
     <input id="nickname" placeholder="昵称（注册时填写）"><br><br>
     <div class="row">
-      <button id="loginBtn" class="primary" type="button">登录</button>
-      <button id="signupBtn" class="secondary" type="button">注册</button>
+      <button class="primary" onclick="login()">登录</button>
+      <button class="secondary" onclick="signup()">注册</button>
     </div>
     <p id="msg" class="muted"></p>
   </div>
@@ -517,19 +517,7 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
 <script>
 const SUPABASE_URL="https://sayzluvdkxscbzvaigja.supabase.co";
 const SUPABASE_KEY="sb_publishable_0FU46ikX3BapZYxXDRVKrA_K5jLe2K0";
-let db=null;
-let supabaseReady=false;
-try{
-  if(typeof supabase==='undefined') throw new Error('页面初始化失败');
-  db=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-  supabaseReady=true;
-}catch(e){
-  console.error('页面初始化错误：',e);
-  setTimeout(()=>{
-    const e1=document.getElementById("msg");
-    if(e1)e1.textContent="页面初始化异常，请刷新后重试。";
-  },0);
-}
+const db=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 
 /* -------------------------------------------------------------
    👑 管理员邮箱配置 (在此填入允许开启 管理员 后台的账号邮箱)
@@ -574,21 +562,6 @@ async function refreshAdminStatus(){
   return currentIsAdmin;
 }
 
-function bindAuthButtons(){
-  const loginBtn=document.getElementById("loginBtn");
-  const signupBtn=document.getElementById("signupBtn");
-  if(loginBtn) loginBtn.addEventListener("click",()=>{
-    const m=document.getElementById("msg");
-    if(m)m.textContent="正在登录……";
-    try{ login(); }catch(e){ console.error(e); if(m)m.textContent="登录错误，请稍后重试。"; }
-  });
-  if(signupBtn) signupBtn.addEventListener("click",()=>{
-    const m=document.getElementById("msg");
-    if(m)m.textContent="正在创建冒险者账号……";
-    try{ signup(); }catch(e){ console.error(e); if(m)m.textContent="注册错误，请检查填写内容后重试。"; }
-  });
-}
-
 async function signup(){
   if(authBusy)return;
 
@@ -614,7 +587,7 @@ async function signup(){
   }
 
   authBusy=true;
-  const btn=document.getElementById("signupBtn");
+  const btn=document.querySelector('#auth button[onclick="signup()"]');
   if(btn)btn.disabled=true;
   msg("正在创建冒险者账号……","muted");
 
@@ -637,7 +610,7 @@ async function signup(){
       }else if(text.includes("rate limit")||text.includes("too many")){
         msg("注册操作太频繁了，请稍等几分钟后再试。","err");
       }else{
-        msg("注册错误："+(error.message||"未知错误"),"err");
+        msg("注册错误，请检查填写内容后重试。","err");
       }
       return;
     }
@@ -657,7 +630,7 @@ async function signup(){
     if(e?.message==="SIGNUP_TIMEOUT"){
       msg("网络错误，请稍后重试。","err");
     }else{
-      msg("注册错误："+(e?.message||String(e)||"未知错误"),"err");
+      msg("注册错误，请检查填写内容后重试。","err");
     }
   }finally{
     authBusy=false;
@@ -1466,17 +1439,23 @@ async function startBattle(){
   }
 
   // 进入战斗的瞬间扣 1 AP；无论之后胜利、失败还是逃跑，都不返还。
+  // 这里只确认 UPDATE 是否成功，不再要求 Supabase 同时把整行资料 SELECT 回来。
+  // 这样可以避免 RLS / 返回权限导致“AP 实际更新成功，但被误判为狩猎失败”。
+  const startBtn=document.getElementById("encounterStartBtn");
+  if(startBtn) startBtn.disabled=true;
   const newAP=Math.max(0,Number(currentAdventurer.action_points||0)-1);
-  const {data:apData,error:apError}=await db.from("adventurers")
+  const {error:apError}=await db.from("adventurers")
     .update({action_points:newAP})
-    .eq("user_id",currentUser.id)
-    .select().single();
-  if(apError||!apData){
+    .eq("user_id",currentUser.id);
+  if(apError){
+    if(startBtn) startBtn.disabled=false;
     const e=document.getElementById("huntModalMsg");
     if(e){e.textContent="暂时无法开始狩猎，请稍后重试。";e.className="err";}
+    console.error("扣除行动点失败：",apError);
     return;
   }
-  currentAdventurer=apData;
+  // 数据库更新成功后直接同步本地玩家资料，不再依赖 UPDATE + SELECT 返回整行。
+  currentAdventurer={...currentAdventurer,action_points:newAP};
   closeHuntModal();
 
   const p=buildPlayerStats(currentAdventurer);
@@ -2737,5 +2716,3 @@ async function checkAdmin() {
 </script>
 </body>
 </html>
-
-<script>bindAuthButtons();</script>
