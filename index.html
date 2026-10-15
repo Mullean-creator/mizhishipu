@@ -71,8 +71,8 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
     <input id="username" placeholder="账号名（注册时填写）"><br><br>
     <input id="nickname" placeholder="昵称（注册时填写）"><br><br>
     <div class="row">
-      <button class="primary" onclick="login()">登录</button>
-      <button class="secondary" onclick="signup()">注册</button>
+      <button id="loginBtn" class="primary" type="button">登录</button>
+      <button id="signupBtn" class="secondary" type="button">注册</button>
     </div>
     <p id="msg" class="muted"></p>
   </div>
@@ -517,7 +517,19 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
 <script>
 const SUPABASE_URL="https://sayzluvdkxscbzvaigja.supabase.co";
 const SUPABASE_KEY="sb_publishable_0FU46ikX3BapZYxXDRVKrA_K5jLe2K0";
-const db=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+let db=null;
+let supabaseReady=false;
+try{
+  if(typeof supabase==='undefined') throw new Error('页面初始化失败');
+  db=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+  supabaseReady=true;
+}catch(e){
+  console.error('页面初始化错误：',e);
+  setTimeout(()=>{
+    const e1=document.getElementById("msg");
+    if(e1)e1.textContent="页面初始化异常，请刷新后重试。";
+  },0);
+}
 
 /* -------------------------------------------------------------
    👑 管理员邮箱配置 (在此填入允许开启 管理员 后台的账号邮箱)
@@ -562,6 +574,21 @@ async function refreshAdminStatus(){
   return currentIsAdmin;
 }
 
+function bindAuthButtons(){
+  const loginBtn=document.getElementById("loginBtn");
+  const signupBtn=document.getElementById("signupBtn");
+  if(loginBtn) loginBtn.addEventListener("click",()=>{
+    const m=document.getElementById("msg");
+    if(m)m.textContent="正在登录……";
+    try{ login(); }catch(e){ console.error(e); if(m)m.textContent="登录错误，请稍后重试。"; }
+  });
+  if(signupBtn) signupBtn.addEventListener("click",()=>{
+    const m=document.getElementById("msg");
+    if(m)m.textContent="正在创建冒险者账号……";
+    try{ signup(); }catch(e){ console.error(e); if(m)m.textContent="注册错误，请检查填写内容后重试。"; }
+  });
+}
+
 async function signup(){
   if(authBusy)return;
 
@@ -587,7 +614,7 @@ async function signup(){
   }
 
   authBusy=true;
-  const btn=document.querySelector('#auth button[onclick="signup()"]');
+  const btn=document.getElementById("signupBtn");
   if(btn)btn.disabled=true;
   msg("正在创建冒险者账号……","muted");
 
@@ -2710,3 +2737,5 @@ async function checkAdmin() {
 </script>
 </body>
 </html>
+
+<script>bindAuthButtons();</script>
