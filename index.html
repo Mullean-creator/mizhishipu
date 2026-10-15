@@ -575,20 +575,21 @@ async function signup(){
   const username=(usernameEl?.value||"").trim();
   const nickname=(nicknameEl?.value||"").trim();
 
+  // 明确指出缺少哪一项，避免手机浏览器/自动填充异常时只显示“填写完整”。
   const missing=[];
   if(!email)missing.push("邮箱");
   if(!password)missing.push("密码");
   if(!username)missing.push("账号名");
   if(!nickname)missing.push("昵称");
   if(missing.length){
-    return msg("请填写完整：还缺少「"+missing.join("、")+"」。","err");
+    msg("请填写："+missing.join("、")+"。","err");
+    return;
   }
-
 
   authBusy=true;
   const btn=document.querySelector('#auth button[onclick="signup()"]');
   if(btn)btn.disabled=true;
-  msg("正在注册……","muted");
+  msg("正在创建冒险者账号……","muted");
 
   try{
     const {data,error}=await db.auth.signUp({
@@ -599,27 +600,30 @@ async function signup(){
 
     if(error){
       console.error("注册失败",error);
-      const text=String(error.message||"").toLowerCase();
-      if(text.includes("already registered")||text.includes("already exists")){
+      const text=(error.message||"").toLowerCase();
+      if(text.includes("already registered")||text.includes("already been registered")||text.includes("user already exists")){
         msg("这个邮箱已经注册过了，请直接登录。","err");
-      }else if(text.includes("password")){
-        msg("密码不符合要求，请换一个更合适的密码。","err");
-      }else if(text.includes("email")){
-        msg("邮箱格式不正确，请检查后重试。","err");
+      }else if(text.includes("rate limit")||text.includes("too many")){
+        msg("注册操作太频繁了，请稍等几分钟后再试。","err");
       }else{
-        msg("注册失败，请检查邮箱、密码后重试。","err");
+        msg("注册错误，请检查填写内容后重试。","err");
       }
       return;
     }
 
+    // 有些 Supabase 项目开启了邮箱验证，signUp 成功后不会直接登录。
     if(data?.user){
-      msg(data.session ? "注册成功！正在进入游戏……" : "注册成功！请先完成邮箱验证，再登录游戏。","ok");
+      if(data.session){
+        msg("注册成功，正在进入游戏……","ok");
+      }else{
+        msg("注册成功！请先验证邮箱，再用邮箱和密码登录。","ok");
+      }
     }else{
-      msg("注册未完成，请检查填写内容后重试。","err");
+      msg("注册成功！请验证邮箱后再登录。","ok");
     }
   }catch(e){
     console.error("注册异常",e);
-    msg("注册失败，网络或注册服务异常，请稍后再试。","err");
+    msg("网络错误，请稍后重试。","err");
   }finally{
     authBusy=false;
     if(btn)btn.disabled=false;
@@ -651,13 +655,13 @@ async function login(){
     const {data,error}=await db.auth.signInWithPassword({email,password});
     if(error){
       console.error("登录失败",error);
-      msg("登录失败，请检查邮箱和密码后重试。","err");
+      msg("登录错误，请检查邮箱和密码后重试。","err");
       return;
     }
     if(data?.user) currentUser=data.user;
   }catch(e){
     console.error("登录异常",e);
-    msg("登录失败：网络或登录服务异常，请稍后再试。","err");
+    msg("网络错误，请稍后重试。","err");
   }finally{
     authBusy=false;
     if(btn)btn.disabled=false;
