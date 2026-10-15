@@ -637,7 +637,7 @@ async function signup(){
       }else if(text.includes("rate limit")||text.includes("too many")){
         msg("注册操作太频繁了，请稍等几分钟后再试。","err");
       }else{
-        msg("注册错误，请检查填写内容后重试。","err");
+        msg("注册错误："+(error.message||"未知错误"),"err");
       }
       return;
     }
@@ -657,7 +657,7 @@ async function signup(){
     if(e?.message==="SIGNUP_TIMEOUT"){
       msg("网络错误，请稍后重试。","err");
     }else{
-      msg("注册错误，请检查填写内容后重试。","err");
+      msg("注册错误："+(e?.message||String(e)||"未知错误"),"err");
     }
   }finally{
     authBusy=false;
