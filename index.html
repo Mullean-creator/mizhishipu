@@ -592,11 +592,15 @@ async function signup(){
   msg("正在创建冒险者账号……","muted");
 
   try{
-    const {data,error}=await db.auth.signUp({
+    const signupRequest=db.auth.signUp({
       email,
       password,
       options:{data:{username,nickname}}
     });
+    const timeout=new Promise((_,reject)=>
+      setTimeout(()=>reject(new Error("SIGNUP_TIMEOUT")),15000)
+    );
+    const {data,error}=await Promise.race([signupRequest,timeout]);
 
     if(error){
       console.error("注册失败",error);
@@ -623,7 +627,11 @@ async function signup(){
     }
   }catch(e){
     console.error("注册异常",e);
-    msg("网络错误，请稍后重试。","err");
+    if(e?.message==="SIGNUP_TIMEOUT"){
+      msg("网络错误，请稍后重试。","err");
+    }else{
+      msg("注册错误，请检查填写内容后重试。","err");
+    }
   }finally{
     authBusy=false;
     if(btn)btn.disabled=false;
