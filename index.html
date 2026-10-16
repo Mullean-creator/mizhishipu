@@ -616,7 +616,8 @@ async function signup(){
       }else if(text.includes("rate limit")||text.includes("too many")){
         msg("注册操作太频繁了，请稍等几分钟后再试。","err");
       }else{
-        msg("注册错误，请检查填写内容后重试。","err");
+        const detail = error?.message || error?.name || "未知错误";
+        msg("注册错误：" + detail,"err");
       }
       return;
     }
@@ -636,7 +637,8 @@ async function signup(){
     if(e?.message==="SIGNUP_TIMEOUT"){
       msg("网络错误，请稍后重试。","err");
     }else{
-      msg("注册错误，请检查填写内容后重试。","err");
+      const detail = e?.message || e?.name || "未知错误";
+      msg("注册错误：" + detail,"err");
     }
   }finally{
     authBusy=false;
@@ -675,13 +677,15 @@ async function login(){
     const {data,error}=await db.auth.signInWithPassword({email,password});
     if(error){
       console.error("登录失败",error);
-      msg("登录错误，请检查邮箱和密码后重试。","err");
+      const detail = error?.message || error?.name || "未知错误";
+      msg("登录错误：" + detail,"err");
       return;
     }
     if(data?.user) currentUser=data.user;
   }catch(e){
     console.error("登录异常",e);
-    msg("网络错误，请稍后重试。","err");
+    const detail = e?.message || e?.name || "未知错误";
+    msg("登录错误：" + detail,"err");
   }finally{
     authBusy=false;
     if(btn)btn.disabled=false;
