@@ -876,7 +876,7 @@ async function loadPanel(){
         <div>🧬 种族：${escapeHtml(d.race)}</div>
         <div>⚔️ 职业：${escapeHtml(d.job)}</div>
         <div>📍 位置：${escapeHtml(d.location||"城镇")}</div>
-        <div>⚡ 行动点：${d.action_points??0} / ${d.max_action_points??5}（每升 1 级上限 +1）</div>
+        <div>⚡ 行动点：${d.action_points??0} / ${d.max_action_points??5}（上限 24）</div>
         <div>💰 金币：${d.coins??0} 枚</div>
         <div>🏆 等级：${Math.max(1,Number(d.level)||1)}</div>
         <div>✨ 经验：${Math.max(0,Number(d.experience)||0)} / ${Math.max(1,Number(d.level)||1)*10}</div>
@@ -1767,7 +1767,7 @@ async function finishBattle(win){
   }
   const oldMaxAP=Math.max(5,Number(currentAdventurer?.max_action_points)||5);
   const oldAP=Math.max(0,Number(currentAdventurer?.action_points)||0);
-  const newMaxAP=oldMaxAP>=9999?oldMaxAP:Math.max(5,4+newLevel);
+  const newMaxAP=oldMaxAP>=9999?oldMaxAP:Math.min(24,Math.max(5,4+newLevel));
   const statUpdates={
     coins:Number(currentAdventurer?.coins||0)+rewardCoins,
     level:newLevel,
@@ -1957,9 +1957,9 @@ async function signin(){
   await loadAdventurer();
 }
 
-// AP 规则：1 级上限 5；每升 1 级，上限 +1。休息时每 60 分钟恢复 1 AP。
+// AP 规则：普通玩家最大行动点固定为 24。休息时每 60 分钟恢复 1 AP，24 点可完整恢复一天。管理员的 9999 AP 兼容设置保留。
 const REST_AP_INTERVAL_MS=60*60*1000;
-function levelMaxAP(level){return Math.max(5,4+Math.max(1,Number(level)||1));}
+function levelMaxAP(level){return Math.min(24,Math.max(5,4+(Number(level)||1)));}
 function restTimestamp(){const v=currentAdventurer?.last_rest;return v?new Date(v).getTime():NaN;}
 function isResting(){
   if(!currentAdventurer||!currentAdventurer.last_rest)return false;
@@ -1970,7 +1970,7 @@ function isResting(){
 }
 async function syncLevelAP(){
   if(!currentUser||!currentAdventurer)return;
-  const oldMax=Math.max(5,Number(currentAdventurer.max_action_points)||5);
+  const oldMax=Math.max(24,Number(currentAdventurer.max_action_points)||24);
   if(oldMax>=9999)return; // 保留管理员的无限 AP 设置
   const target=levelMaxAP(currentAdventurer.level);
   if(oldMax===target)return;
@@ -2002,7 +2002,7 @@ function renderRestStatus(){
   const home=document.getElementById('restHomeStatus');
   if(home)home.textContent=active?(ap>=max?'🛏️ 你正在休息，AP 已回满，可以前往客栈结束休息。':`🛏️ 你正在休息：AP ${ap}/${max}，每 60 分钟恢复 1 点。`):'当前没有在休息。';
   const status=document.getElementById('innRestStatus'),actions=document.getElementById('innRestActions');
-  if(status)status.innerHTML=active?`<b>🛏️ 当前状态：正在休息</b><p>行动点：${ap} / ${max}</p>${ap>=max?'<p class="ok">AP 已回满！你可以自行结束休息。</p>':'<p class="muted">休息期间其他游戏行为已锁定。每 60 分钟恢复 1 点 AP。</p>'}`:`<b>当前状态：未休息</b><p>行动点：${ap} / ${max}</p>`;
+  if(status)status.innerHTML=active?`<b>🛏️ 当前状态：正在休息</b><p>行动点：${ap} / ${max}</p>${ap>=max?'<p class="ok">AP 已回满！你可以自行结束休息。</p>':'<p class="muted">休息期间其他游戏行为已锁定。每 60 分钟恢复 1 点 AP，24 点约一天恢复满。</p>'}`:`<b>当前状态：未休息</b><p>行动点：${ap} / ${max}</p>`;
   if(actions)actions.innerHTML=active?(ap>=max?'<button class="primary" onclick="cancelRest()">结束休息，恢复行动</button>':'<button class="secondary" disabled>休息中，请等待 AP 回满</button>'):'<button class="primary" onclick="rest()">开始休息</button>';
 }
 async function rest(){
@@ -2013,7 +2013,7 @@ async function rest(){
   const {data,error}=await db.from('adventurers').update({last_rest:new Date().toISOString()}).eq('user_id',currentUser.id).select().single();
   if(error||!data){if(e){e.textContent='无法开始休息：'+(error?.message||'未知错误');e.className='err';}return;}
   currentAdventurer=data;
-  if(e){e.textContent='已开始休息。每 60 分钟恢复 1 点 AP；AP 回满后可自行结束。';e.className='ok';}
+  if(e){e.textContent='已开始休息。每 60 分钟恢复 1 点 AP，24 点约一天恢复满；AP 回满后可自行结束。';e.className='ok';}
   renderRestStatus();
 }
 async function cancelRest(){
@@ -2028,10 +2028,12 @@ async function cancelRest(){
 }
 // 休息期间拦截所有游戏行为按钮，仅保留菜单、美食镇/客栈导航与结束休息。
 document.addEventListener('click',function(ev){
+  // 管理员后台始终可用；管理员不能因为自己处于休息状态而被拦截在后台之外。
+  if(isAdmin() && ev.target.closest('#adminSection,#navAdmin'))return;
   if(!isResting())return;
   const b=ev.target.closest('button');if(!b)return;
   const action=b.getAttribute('onclick')||'';
-  const allowed=action.includes('toggleSide(')||action.includes('closeSide(')||action.includes('logout(')||action.includes("showSection('main')")||action.includes("showSection('panel')")||action.includes("showSection('town')")||action.includes("showSection('inventory')")||action.includes("showSection('recipe')")||action.includes("showSection('buff')")||action.includes("townOpen('inn')")||action.includes('cancelRest(');
+  const allowed=action.includes('toggleSide(')||action.includes('closeSide(')||action.includes('logout(')||action.includes("showSection('main')")||action.includes("showSection('panel')")||action.includes("showSection('town')")||action.includes("showSection('inventory')")||action.includes("showSection('recipe')")||action.includes("showSection('buff')")||action.includes("showSection('admin')")||action.includes("townOpen('inn')")||action.includes('cancelRest(')||action.includes('loadInventory(')||action.includes('submitRecipe(')||action.includes('drawFoodBuff(')||action.includes('saveCustomBuff(')||action.includes('deleteCustomBuff(');
   if(!allowed){ev.preventDefault();ev.stopImmediatePropagation();const msg=document.getElementById('restMsg');if(msg){msg.textContent='你正在客栈休息，AP 回满后才能进行其他行为。';msg.className='err';}return;}
 },true);
 setInterval(async()=>{
@@ -2276,7 +2278,7 @@ function townOpen(type){
     loadShop('gear');return;
   }
   if(type==='inn'){
-    box.innerHTML='<h3>🛏️ 客栈</h3><p>休息期间无法进行狩猎、购买、出售、签到、穿戴装备或其他游戏行为；可以查看背包、提交料理和查看/使用美食 Buff。每 60 分钟恢复 1 点 AP；AP 回满后可自行结束休息。</p><div id="innRestStatus" class="huntResult" style="margin:12px 0">正在读取休息状态……</div><div id="innRestActions"></div><p id="restMsg" class="muted"></p>';
+    box.innerHTML='<h3>🛏️ 客栈</h3><p>休息期间无法狩猎、购买、出售、签到或更换装备；可以正常查看和使用背包、提交料理、美食 Buff。每 60 分钟恢复 1 点 AP，24 点约一天恢复满；AP 回满后可自行结束休息。</p><div id="innRestStatus" class="huntResult" style="margin:12px 0">正在读取休息状态……</div><div id="innRestActions"></div><p id="restMsg" class="muted"></p>';
     renderRestStatus();return;
   }
   box.innerHTML='<p>请选择美食镇设施。</p>';
