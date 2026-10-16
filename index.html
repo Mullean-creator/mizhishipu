@@ -519,7 +519,28 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
 <script>
 const SUPABASE_URL="https://sayzluvdkxscbzvaigja.supabase.co";
 const SUPABASE_KEY="sb_publishable_0FU46ikX3BapZYxXDRVKrA_K5jLe2K0";
-let db=(window.supabase && typeof window.supabase.createClient==="function") ? window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY) : null;
+// 部署免费中转后，把下面的空字符串替换成 Worker 的完整地址，例如 https://your-auth-proxy.yourname.workers.dev
+// 未填写时仍使用原有直连方式，不会影响现有网页；填写后仅转发 /auth/v1/ 身份验证请求。
+const AUTH_PROXY_URL="https://mizhishipu-auth.zurongman.workers.dev";
+const nativeFetch=window.fetch.bind(window);
+async function supabaseFetch(input,init){
+  if(!AUTH_PROXY_URL) return nativeFetch(input,init);
+  let request;
+  try{ request=input instanceof Request ? new Request(input,init) : new Request(input,init); }
+  catch(e){ return nativeFetch(input,init); }
+  const requestUrl=new URL(request.url);
+  const baseUrl=new URL(SUPABASE_URL);
+  if(requestUrl.origin===baseUrl.origin && requestUrl.pathname.startsWith("/auth/v1/")){
+    const proxyBase=AUTH_PROXY_URL.replace(/\/+$/,"");
+    const target=proxyBase+requestUrl.pathname+requestUrl.search;
+    return nativeFetch(new Request(target,request));
+  }
+  return nativeFetch(request);
+}
+function createGameClient(){
+  return window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{global:{fetch:supabaseFetch}});
+}
+let db=(window.supabase && typeof window.supabase.createClient==="function") ? createGameClient() : null;
 let supabaseLoading=null;
 function supabaseReady(){ return !!db; }
 
@@ -545,7 +566,7 @@ async function ensureSupabase(){
       try{
         await loadScript(src);
         if(window.supabase && typeof window.supabase.createClient==="function"){
-          db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+          db=createGameClient();
           return db;
         }
       }catch(e){ console.warn("Supabase 客户端加载失败：",src,e); }
