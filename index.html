@@ -525,18 +525,45 @@ const AUTH_PROXY_URL="https://mizhishipu-auth.zurongman.workers.dev";
 const nativeFetch=window.fetch.bind(window);
 async function supabaseFetch(input,init){
   if(!AUTH_PROXY_URL) return nativeFetch(input,init);
+
   let request;
-  try{ request=input instanceof Request ? new Request(input,init) : new Request(input,init); }
-  catch(e){ return nativeFetch(input,init); }
+  try{
+    request=input instanceof Request ? input : new Request(input,init);
+  }catch(e){
+    return nativeFetch(input,init);
+  }
+
   const requestUrl=new URL(request.url);
   const baseUrl=new URL(SUPABASE_URL);
+
   if(requestUrl.origin===baseUrl.origin && requestUrl.pathname.startsWith("/auth/v1/")){
     const proxyBase=AUTH_PROXY_URL.replace(/\/+$/,"");
     const target=proxyBase+requestUrl.pathname+requestUrl.search;
-    return nativeFetch(new Request(target,request));
+
+    // 浏览器端不能直接把原 Request 的 ReadableStream body
+    // 重新挂到另一个 URL，否则部分移动浏览器会报：
+    // "ReadableStream uploading is not supported"
+    let body=undefined;
+    if(request.method!=="GET" && request.method!=="HEAD"){
+      body=await request.clone().arrayBuffer();
+    }
+
+    const proxyInit={
+      method:request.method,
+      headers:new Headers(request.headers),
+      body,
+      credentials:request.credentials,
+      mode:"cors",
+      redirect:request.redirect,
+      cache:request.cache
+    };
+
+    return nativeFetch(target,proxyInit);
   }
+
   return nativeFetch(request);
 }
+
 function createGameClient(){
   return window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{global:{fetch:supabaseFetch}});
 }
