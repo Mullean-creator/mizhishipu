@@ -14,7 +14,7 @@
 <meta name="twitter:description" content="欢迎各位冒险者前往美食大陆开启自己的寻味之旅！">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-/* Supabase 备用加载：主 CDN 没有成功加载时，立即同步尝试备用 CDN，避免后续游戏脚本在 db 不存在时静默失效。 */
+/* Supabase 客户端加载：保留主 CDN + 备用 CDN。后续脚本还会再次检查，避免 CDN 短暂失败时整页静默失效。 */
 if(!window.supabase || typeof window.supabase.createClient!=="function"){
   document.write('<script src="https://unpkg.com/@supabase/supabase-js@2"><\/script>');
 }
@@ -519,9 +519,68 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
 <script>
 const SUPABASE_URL="https://sayzluvdkxscbzvaigja.supabase.co";
 const SUPABASE_KEY="sb_publishable_0FU46ikX3BapZYxXDRVKrA_K5jLe2K0";
-const db=(window.supabase && typeof window.supabase.createClient==="function") ? window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY) : null;
-function supabaseReady(){
-  return !!db;
+let db=(window.supabase && typeof window.supabase.createClient==="function") ? window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY) : null;
+let supabaseLoading=null;
+function supabaseReady(){ return !!db; }
+
+function loadScript(src){
+  return new Promise((resolve,reject)=>{
+    const s=document.createElement("script");
+    s.src=src; s.async=true;
+    s.onload=()=>resolve();
+    s.onerror=()=>reject(new Error("SUPABASE_CDN_LOAD_FAILED"));
+    document.head.appendChild(s);
+  });
+}
+
+async function ensureSupabase(){
+  if(supabaseReady()) return db;
+  if(supabaseLoading) return supabaseLoading;
+  supabaseLoading=(async()=>{
+    const sources=[
+      "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2",
+      "https://unpkg.com/@supabase/supabase-js@2"
+    ];
+    for(const src of sources){
+      try{
+        await loadScript(src);
+        if(window.supabase && typeof window.supabase.createClient==="function"){
+          db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+          return db;
+        }
+      }catch(e){ console.warn("Supabase 客户端加载失败：",src,e); }
+    }
+    throw new Error("SUPABASE_CDN_LOAD_FAILED");
+  })();
+  try{return await supabaseLoading;}finally{supabaseLoading=null;}
+}
+
+function authErrorText(e){
+  const raw=e?.message || e?.name || String(e||"");
+  if(raw.toLowerCase().includes("failed to fetch") || raw.toLowerCase().includes("networkerror")){
+    return "网络连接失败（无法连接登录服务）。请检查网络后重试。";
+  }
+  if(raw.includes("SUPABASE_CDN_LOAD_FAILED")){
+    return "页面连接服务失败，请刷新页面后重试。";
+  }
+  return raw || "未知错误";
+}
+
+async function authWithRetry(action){
+  let lastError=null;
+  for(let attempt=0;attempt<2;attempt++){
+    try{
+      const client=await ensureSupabase();
+      return await action(client);
+    }catch(e){
+      lastError=e;
+      const text=(e?.message||"").toLowerCase();
+      const retryable=text.includes("failed to fetch") || text.includes("networkerror") || text.includes("timeout");
+      if(!retryable || attempt===1) throw e;
+      await new Promise(r=>setTimeout(r,800));
+    }
+  }
+  throw lastError || new Error("未知错误");
 }
 
 /* -------------------------------------------------------------
@@ -569,7 +628,7 @@ async function refreshAdminStatus(){
 
 async function signup(){
   if(authBusy)return;
-  if(!supabaseReady()){ msg("页面初始化异常，请刷新后重试。","err"); return; }
+  try{ await ensureSupabase(); }catch(e){ msg(authErrorText(e),"err"); return; }
 
   const emailEl=document.getElementById("email");
   const passwordEl=document.getElementById("password");
@@ -598,14 +657,12 @@ async function signup(){
   msg("正在创建冒险者账号……","muted");
 
   try{
-    const signupRequest=db.auth.signUp({
+    const signupRequest=authWithRetry(client=>client.auth.signUp({
       email,
       password,
       options:{data:{username,nickname}}
-    });
-    const timeout=new Promise((_,reject)=>
-      setTimeout(()=>reject(new Error("SIGNUP_TIMEOUT")),15000)
-    );
+    }));
+    const timeout=new Promise((_,reject)=>setTimeout(()=>reject(new Error("SIGNUP_TIMEOUT")),15000));
     const {data,error}=await Promise.race([signupRequest,timeout]);
 
     if(error){
@@ -616,7 +673,7 @@ async function signup(){
       }else if(text.includes("rate limit")||text.includes("too many")){
         msg("注册操作太频繁了，请稍等几分钟后再试。","err");
       }else{
-        const detail = error?.message || error?.name || "未知错误";
+        const detail = authErrorText(error);
         msg("注册错误：" + detail,"err");
       }
       return;
@@ -637,7 +694,7 @@ async function signup(){
     if(e?.message==="SIGNUP_TIMEOUT"){
       msg("网络错误，请稍后重试。","err");
     }else{
-      const detail = e?.message || e?.name || "未知错误";
+      const detail = authErrorText(e);
       msg("注册错误：" + detail,"err");
     }
   }finally{
@@ -650,8 +707,8 @@ let authBusy=false;
 let gameLoading=false;
 
 // 注册/登录按钮自检：保留原有 onclick，不再重复绑定同一函数，避免一次点击触发两次请求。
-document.addEventListener("DOMContentLoaded",()=>{
-  if(!supabaseReady()) msg("页面初始化异常，请刷新后重试。","err");
+document.addEventListener("DOMContentLoaded",async()=>{
+  try{ await ensureSupabase(); }catch(e){ msg(authErrorText(e),"err"); }
 });
 
 function showLogin(message=""){
@@ -665,7 +722,7 @@ function showLogin(message=""){
 
 async function login(){
   if(authBusy)return;
-  if(!supabaseReady()){ msg("页面初始化异常，请刷新后重试。","err"); return; }
+  try{ await ensureSupabase(); }catch(e){ msg(authErrorText(e),"err"); return; }
   const email=document.getElementById("email").value.trim();
   const password=document.getElementById("password").value;
   if(!email||!password)return msg("请输入邮箱和密码。","err");
@@ -674,17 +731,17 @@ async function login(){
   if(btn)btn.disabled=true;
   msg("正在登录……","muted");
   try{
-    const {data,error}=await db.auth.signInWithPassword({email,password});
+    const {data,error}=await authWithRetry(client=>client.auth.signInWithPassword({email,password}));
     if(error){
       console.error("登录失败",error);
-      const detail = error?.message || error?.name || "未知错误";
+      const detail = authErrorText(error);
       msg("登录错误：" + detail,"err");
       return;
     }
     if(data?.user) currentUser=data.user;
   }catch(e){
     console.error("登录异常",e);
-    const detail = e?.message || e?.name || "未知错误";
+    const detail = authErrorText(e);
     msg("登录错误：" + detail,"err");
   }finally{
     authBusy=false;
