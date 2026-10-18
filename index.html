@@ -519,53 +519,8 @@ input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radiu
 <script>
 const SUPABASE_URL="https://sayzluvdkxscbzvaigja.supabase.co";
 const SUPABASE_KEY="sb_publishable_0FU46ikX3BapZYxXDRVKrA_K5jLe2K0";
-// 部署免费中转后，把下面的空字符串替换成 Worker 的完整地址，例如 https://your-auth-proxy.yourname.workers.dev
-// 未填写时仍使用原有直连方式，不会影响现有网页；填写后仅转发 /auth/v1/ 身份验证请求。
-const AUTH_PROXY_URL="https://mizhishipu-auth.zurongman.workers.dev";
-const nativeFetch=window.fetch.bind(window);
-async function supabaseFetch(input,init){
-  if(!AUTH_PROXY_URL) return nativeFetch(input,init);
-
-  let request;
-  try{
-    request=input instanceof Request ? input : new Request(input,init);
-  }catch(e){
-    return nativeFetch(input,init);
-  }
-
-  const requestUrl=new URL(request.url);
-  const baseUrl=new URL(SUPABASE_URL);
-
-  if(requestUrl.origin===baseUrl.origin && requestUrl.pathname.startsWith("/auth/v1/")){
-    const proxyBase=AUTH_PROXY_URL.replace(/\/+$/,"");
-    const target=proxyBase+requestUrl.pathname+requestUrl.search;
-
-    // 浏览器端不能直接把原 Request 的 ReadableStream body
-    // 重新挂到另一个 URL，否则部分移动浏览器会报：
-    // "ReadableStream uploading is not supported"
-    let body=undefined;
-    if(request.method!=="GET" && request.method!=="HEAD"){
-      body=await request.clone().arrayBuffer();
-    }
-
-    const proxyInit={
-      method:request.method,
-      headers:new Headers(request.headers),
-      body,
-      credentials:request.credentials,
-      mode:"cors",
-      redirect:request.redirect,
-      cache:request.cache
-    };
-
-    return nativeFetch(target,proxyInit);
-  }
-
-  return nativeFetch(request);
-}
-
 function createGameClient(){
-  return window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{global:{fetch:supabaseFetch}});
+  return window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 }
 let db=(window.supabase && typeof window.supabase.createClient==="function") ? createGameClient() : null;
 let supabaseLoading=null;
@@ -2079,9 +2034,10 @@ function isResting(){
 }
 async function syncLevelAP(){
   if(!currentUser||!currentAdventurer)return;
-  const oldMax=Math.max(24,Number(currentAdventurer.max_action_points)||24);
-  if(oldMax>=9999)return; // 保留管理员的无限 AP 设置
-  const target=levelMaxAP(currentAdventurer.level);
+  const storedMax=Number(currentAdventurer.max_action_points)||5;
+  if(storedMax>=9999)return; // 保留管理员的无限 AP 设置
+  const oldMax=Math.min(24,Math.max(5,storedMax));
+  const target=Math.min(24,levelMaxAP(currentAdventurer.level));
   if(oldMax===target)return;
   const oldAP=Math.max(0,Number(currentAdventurer.action_points)||0);
   const nextAP=Math.min(target,oldAP+(target>oldMax&&oldAP>=oldMax?target-oldMax:0));
@@ -2089,20 +2045,32 @@ async function syncLevelAP(){
   if(!error&&data)currentAdventurer=data;
 }
 async function updateRestProgress(){
-  if(!currentUser||!currentAdventurer?.last_rest)return;
-  const start=restTimestamp();if(!Number.isFinite(start))return;
+  if(!currentUser||!currentAdventurer?.last_rest)return false;
+  const start=restTimestamp();if(!Number.isFinite(start))return false;
   const now=Date.now();
   const elapsed=Math.max(0,now-start);
   const gained=Math.floor(elapsed/REST_AP_INTERVAL_MS);
   const max=Math.max(5,Number(currentAdventurer.max_action_points)||5);
   const ap=Math.max(0,Number(currentAdventurer.action_points)||0);
+  if(ap>=max)return true;
+  if(gained<1)return false;
+
+  // 每次成功保存后，把 last_rest 推进到已经结算过的整小时，避免重复领取。
   const nextAP=Math.min(max,ap+gained);
   const nextStamp=new Date(start+gained*REST_AP_INTERVAL_MS).toISOString();
-  if(gained>0||nextAP!==ap){
-    const {data,error}=await db.from('adventurers').update({action_points:nextAP,last_rest:nextStamp}).eq('user_id',currentUser.id).select().single();
-    if(!error&&data)currentAdventurer=data;
+  const {data,error}=await db.from('adventurers')
+    .update({action_points:nextAP,last_rest:nextStamp})
+    .eq('user_id',currentUser.id)
+    .select().single();
+
+  if(error||!data){
+    const e=document.getElementById('restMsg');
+    if(e){e.textContent='体力恢复保存失败，请稍后再试。';e.className='err';}
+    console.error('AP恢复保存失败:',error);
+    return false;
   }
-  // AP 回满后继续保留休息状态，直到玩家主动结束休息。
+  currentAdventurer=data;
+  return true;
 }
 function renderRestStatus(){
   const d=currentAdventurer;if(!d)return;
@@ -2212,6 +2180,11 @@ function onAdminSelectPlayer(){
 }
 
 function collectAdminFields(prefix){
+  const rawMaxAP=Math.max(5,Number(document.getElementById(prefix+"max_ap")?.value||5));
+  // 普通玩家最大 AP 固定不超过 24；9999 仅作为管理员的特殊无限 AP 设置。
+  const maxAP=rawMaxAP>=9999?9999:Math.min(24,rawMaxAP);
+  const rawAP=Math.max(0,Number(document.getElementById(prefix+"ap")?.value||0));
+  const actionPoints=maxAP>=9999?rawAP:Math.min(maxAP,rawAP);
   return {
     name:document.getElementById(prefix+"name")?.value.trim(),
     age:Number(document.getElementById(prefix+"age")?.value),
@@ -2225,8 +2198,8 @@ function collectAdminFields(prefix){
     proficiency:Number(document.getElementById(prefix+"proficiency")?.value||0),
     smell:Number(document.getElementById(prefix+"smell")?.value||0),
     magic_sense:Number(document.getElementById(prefix+"magic_sense")?.value||0),
-    action_points:Number(document.getElementById(prefix+"ap")?.value||0),
-    max_action_points:Number(document.getElementById(prefix+"max_ap")?.value||5),
+    action_points:actionPoints,
+    max_action_points:maxAP,
     coins:Number(document.getElementById(prefix+"coins")?.value||0),
     level:Number(document.getElementById(prefix+"level")?.value||1)
   };
